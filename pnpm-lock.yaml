@@ -53,6 +53,9 @@ importers:
       react-hook-form:
         specifier: ^7.90.0
         version: 7.90.0(@types/react@19.3.0)(react@19.3.0)
+      react-pagination-bar:
+        specifier: ^2.0.1
+        version: 2.0.1(react@19.3.0)
       react-redux:
         specifier: ^9.3.1
         version: 9.3.1(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1)
@@ -2666,6 +2669,12 @@ packages:
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
+
+  react-pagination-bar@2.0.1:
+    resolution: {integrity: sha512-yOjuGhH/4V2ya0Jw6wQqOD1qDbLVBjRdWPMFkdvAg4i8O9lEN/fMIeUk0Bn05APJn9cK7RVUjfyFLTd5PnIxZQ==}
+    engines: {node: '>=8', npm: '>=5'}
+    peerDependencies:
+      react: '>=16.8.0'
 
   react-redux@9.3.1:
     resolution: {integrity: sha512-vxMLT0lalUjbZPkoTepWyKAZbjIIFssNx/CEL9lTfwQBU6XpkGSmCNdcCIrkOBUgB68uftZMnbXVb6DwGnhRKQ==}
@@ -5743,6 +5752,10 @@ snapshots:
       '@types/react': 19.3.0
 
   react-is@16.13.1: {}
+
+  react-pagination-bar@2.0.1(react@19.3.0):
+    dependencies:
+      react: 19.3.0
 
   react-redux@9.3.1(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1):
     dependencies:

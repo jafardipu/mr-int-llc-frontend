@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -24,6 +24,7 @@
     "react-countup": "^6.5.3",
     "react-dom": "19.3.0",
     "react-hook-form": "^7.90.0",
+    "react-pagination-bar": "^2.0.1",
     "react-redux": "^9.3.1",
     "redux-persist": "^6.0.0",
     "shadcn": "^4.22.1",

@@ -7,10 +7,14 @@ export const metadata = {
     "Discover products from around the world with MR International — global shopping, made simple.",
 };
 
-export default function AllProductsPage() {
+type AllProductsPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default function AllProductsPage({ searchParams }: AllProductsPageProps) {
   return (
     <Container className="page-padding">
-      <AllProductsContent />
+      <AllProductsContent searchParams={searchParams} />
     </Container>
   );
 }

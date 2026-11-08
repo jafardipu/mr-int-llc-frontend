@@ -12,7 +12,14 @@ export default function ProductResultsHeader({
 }: ProductResultsHeaderProps) {
   const searchParams = useSearchParams();
   const updateSearchParams = useUpdateSearchParams();
-  const sortBy = searchParams.get("sort") ?? "featured";
+  const requestedSort = searchParams.get("sort");
+  const sortBy =
+    requestedSort &&
+    ["retailPrice", "-retailPrice", "-avgRating", "-createdAt"].includes(
+      requestedSort,
+    )
+      ? requestedSort
+      : "featured";
 
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -27,14 +34,16 @@ export default function ProductResultsHeader({
           onChange={(event) =>
             updateSearchParams({
               sort: event.target.value === "featured" ? null : event.target.value,
+              page: "1",
             })
           }
           className="cursor-pointer rounded-md border border-[#E9E6DF] bg-white px-2.5 py-2 text-sm font-medium text-[#34332F] outline-none focus:border-secondary-color"
         >
           <option value="featured">Featured</option>
-          <option value="price-low">Price: Low to High</option>
-          <option value="price-high">Price: High to Low</option>
-          <option value="rating">Top Rated</option>
+          <option value="retailPrice">Price: Low to High</option>
+          <option value="-retailPrice">Price: High to Low</option>
+          <option value="-avgRating">Top Rated</option>
+          <option value="-createdAt">Newest</option>
         </select>
       </label>
     </div>

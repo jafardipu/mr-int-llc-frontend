@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import Container from "@/components/container/Container";
 import { allProducts } from "@/data/all-products";
+import { getCatalogProductById } from "@/lib/catalog-api";
 import ProductImagesCarousel from "./_components/carousel/ProductImagesCarousel";
 import {
   ProductFavoriteButton,
@@ -15,8 +15,9 @@ type ProductDetailsPageProps = {
   params: Promise<{ id: string }>;
 };
 
-function getProduct(id: string) {
-  return allProducts.find((product) => product.id === id);
+async function getProduct(id: string) {
+  const localProduct = allProducts.find((product) => product.id === id);
+  return localProduct ?? (await getCatalogProductById(id));
 }
 
 export function generateStaticParams() {
@@ -27,7 +28,7 @@ export async function generateMetadata({
   params,
 }: ProductDetailsPageProps): Promise<Metadata> {
   const { id } = await params;
-  const product = getProduct(id);
+  const product = await getProduct(id);
 
   return {
     title: product?.title ?? "Product not found",
@@ -80,23 +81,28 @@ export default function ProductDetailsPage({
 
 async function ProductDetailsContent({ params }: ProductDetailsPageProps) {
   const { id } = await params;
-  const product = getProduct(id);
+  const product = await getProduct(id);
 
   if (!product) notFound();
 
   const price = Number(product.price);
-  const description = `Explore the ${product.title} in our ${product.category.toLowerCase()} collection. Contact our team for product information and wholesale purchasing options.`;
+  const description =
+    ("description" in product && product.description) ||
+    `Explore the ${product.title} in our ${product.category.toLowerCase()} collection. Contact our team for product information and wholesale purchasing options.`;
+  const galleryImages =
+    "galleryImages" in product && product.galleryImages.length
+      ? product.galleryImages
+      : [product.image];
 
   return (
     <Container className="page-padding">
       <main className="mx-auto w-full max-w-7xl">
         <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-10 xl:gap-12">
           <ProductImagesCarousel
-            slides={[
-              { url: product.image, alt: product.imageAlt },
-              { url: product.image, alt: product.imageAlt },
-              { url: product.image, alt: product.imageAlt },
-            ]}
+            slides={galleryImages.map((url) => ({
+              url,
+              alt: product.imageAlt,
+            }))}
           />
 
           <section aria-labelledby="product-title" className="min-w-0">
@@ -112,7 +118,7 @@ async function ProductDetailsContent({ params }: ProductDetailsPageProps) {
                   {product.title}
                 </h1>
                 <p className="mt-2 text-xs text-[#4B5563]">
-                  SKU: {product.id.toUpperCase()}
+                  SKU: {("sku" in product && product.sku) || product.id.toUpperCase()}
                 </p>
                 <p className="mt-2 flex items-center gap-2 text-xs font-medium text-[#348267]">
                   <span

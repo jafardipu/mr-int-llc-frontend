@@ -1,10 +1,10 @@
 import ProductCard from "@/components/shared/cards/product/ProductCard";
-import type { CatalogProduct } from "@/data/all-products";
+import type { TProducts } from "@/types/products";
 
 export default function ProductGrid({
   products,
 }: {
-  products: CatalogProduct[];
+  products: TProducts[];
 }) {
   if (products.length === 0) {
     return (

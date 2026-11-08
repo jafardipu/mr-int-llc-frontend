@@ -11,12 +11,24 @@ import { useUpdateSearchParams } from "@/hooks/useUpdateSearchParams";
 import FilterOptionGroup from "./FilterOptionGroup";
 import { FilterIcon } from "@/icons";
 
-export default function ProductFilterSidebar({ page }: { page?: string }) {
+interface ProductFilterSidebarProps {
+  page?: string;
+  brands?: { id: string; name: string }[];
+  categories?: { id: string; name: string }[];
+  showCatalogTags?: boolean;
+}
+
+export default function ProductFilterSidebar({
+  page,
+  brands,
+  categories,
+  showCatalogTags = true,
+}: ProductFilterSidebarProps) {
   const searchParams = useSearchParams();
   const updateSearchParams = useUpdateSearchParams();
-  const selectedBrands = searchParams.get("brand")?.split(",").filter(Boolean) ?? [];
+  const selectedBrands = searchParams.get("brandId")?.split(",").filter(Boolean) ?? [];
   const selectedCategories =
-    searchParams.get("category")?.split(",").filter(Boolean) ?? [];
+    searchParams.get("categoryId")?.split(",").filter(Boolean) ?? [];
   const selectedFilters =
     searchParams
       .get("filter")
@@ -26,12 +38,10 @@ export default function ProductFilterSidebar({ page }: { page?: string }) {
       ) ?? [];
 
   const toggleSearchParamValue = (key: string, value: string) => {
-    const values = searchParams.get(key)?.split(",").filter(Boolean) ?? [];
-    const nextValues = values.includes(value)
-      ? values.filter((item) => item !== value)
-      : [...values, value];
-
-    updateSearchParams({ [key]: nextValues.length ? nextValues.join(",") : null });
+    updateSearchParams({
+      [key]: searchParams.get(key) === value ? null : value,
+      page: "1",
+    });
   };
 
   return (
@@ -58,7 +68,10 @@ export default function ProductFilterSidebar({ page }: { page?: string }) {
             placeholder="Min"
             value={searchParams.get("minPrice") ?? ""}
             onChange={(event) =>
-              updateSearchParams({ minPrice: event.target.value || null })
+              updateSearchParams({
+                minPrice: event.target.value || null,
+                page: "1",
+              })
             }
             className="min-w-0 rounded-md border border-[#E2DFD9] px-3 py-2 text-sm outline-none transition focus:border-secondary-color focus:ring-2 focus:ring-secondary-color/15"
           />
@@ -73,7 +86,10 @@ export default function ProductFilterSidebar({ page }: { page?: string }) {
             placeholder="Max"
             value={searchParams.get("maxPrice") ?? ""}
             onChange={(event) =>
-              updateSearchParams({ maxPrice: event.target.value || null })
+              updateSearchParams({
+                maxPrice: event.target.value || null,
+                page: "1",
+              })
             }
             className="min-w-0 rounded-md border border-[#E2DFD9] px-3 py-2 text-sm outline-none transition focus:border-secondary-color focus:ring-2 focus:ring-secondary-color/15"
           />
@@ -81,29 +97,50 @@ export default function ProductFilterSidebar({ page }: { page?: string }) {
       </section>
 
       <div className="space-y-5">
-        { page !== "brand" && <FilterOptionGroup
-          title="Brand"
-          options={brandOptions.map((brand) => ({ label: brand, value: brand }))}
-          selectedValues={selectedBrands}
-          onChange={(brand) => toggleSearchParamValue("brand", brand)}
-        />}
+        {page !== "brand" && (
+          <FilterOptionGroup
+            title="Brand"
+            options={
+              brands?.map(({ id, name }) => ({ label: name, value: id })) ??
+              brandOptions.map((brand) => ({ label: brand, value: brand }))
+            }
+            selectedValues={selectedBrands}
+            onChange={(brand) => toggleSearchParamValue("brandId", brand)}
+          />
+        )}
         <FilterOptionGroup
           title="Category"
-          options={categoryOptions.map((category) => ({
-            label: category,
-            value: category,
-          }))}
+          options={
+            categories?.map(({ id, name }) => ({ label: name, value: id })) ??
+            categoryOptions.map((category) => ({
+              label: category,
+              value: category,
+            }))
+          }
           selectedValues={selectedCategories}
           onChange={(category) =>
-            toggleSearchParamValue("category", category)
+            toggleSearchParamValue("categoryId", category)
           }
         />
-        <FilterOptionGroup
-          title="Filters"
-          options={filterOptions}
-          selectedValues={selectedFilters}
-          onChange={(filter) => toggleSearchParamValue("filter", filter)}
-        />
+        {showCatalogTags && (
+          <FilterOptionGroup
+            title="Filters"
+            options={filterOptions}
+            selectedValues={selectedFilters}
+            onChange={(filter) => {
+              const values =
+                searchParams.get("filter")?.split(",").filter(Boolean) ?? [];
+              const nextValues = values.includes(filter)
+                ? values.filter((item) => item !== filter)
+                : [...values, filter];
+
+              updateSearchParams({
+                filter: nextValues.length ? nextValues.join(",") : null,
+                page: "1",
+              });
+            }}
+          />
+        )}
       </div>
     </aside>
   );
