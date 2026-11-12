@@ -1,49 +1,27 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { createSlice } from "@reduxjs/toolkit";
-import Cookies from "js-cookie";
+import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
-const initialState = {
+type AuthState = {
+  user: Record<string, unknown> | null;
+};
+
+const initialState: AuthState = {
   user: null,
-  token: null,
-  refreshToken: null,
 };
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    setUser: (state, action) => {
-      const { user, token, refreshToken } = action.payload;
-
-      state.user = user;
-      state.token = token;
-
-      // Store token in Cookies for middleware authentication
-      Cookies.set("betteroffmarket-access-token", token, {
-        path: "/",
-        expires: 30,
-      });
-
-      // Cookies.set("refreshToken", refreshToken, {
-        
-      // })
+    setUser: (state, action: PayloadAction<{ user?: Record<string, unknown> | null }>) => {
+      state.user = action.payload.user ?? null;
     },
-
     logout: (state) => {
       state.user = null;
-      state.token = null;
-
-      // Remove token from cookie
-      Cookies.remove("betteroffmarket-access-token", { path: "/" });
-      // Cookies.remove("refreshToken", { path: "/" });
     },
   },
 });
 
-// selectors
-export const selectUser = (state: any) => state.auth.user;
-export const selectToken = (state: any) => state.auth.token;
-
+export const selectUser = (state: { auth: AuthState }) => state.auth.user;
 export const { setUser, logout } = authSlice.actions;
 
 export default authSlice.reducer;

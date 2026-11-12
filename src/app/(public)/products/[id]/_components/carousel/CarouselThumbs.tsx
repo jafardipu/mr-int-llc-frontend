@@ -1,4 +1,5 @@
-import Image, { type ImageProps } from "next/image";
+import type { ImageProps } from "next/image";
+import { ProductPreviewImage } from "@/components/shared/product/ProductPreviewImage";
 
 type CarouselThumbsProps = {
   selected: boolean;
@@ -23,7 +24,7 @@ export function CarouselThumbs({
         className={`embla-thumbs__slide__button${selected ? " is-selected" : ""}`}
       >
         <span aria-hidden="true" className="embla-thumbs__image-frame">
-          <Image
+          <ProductPreviewImage
             src={src}
             fill
             sizes="(max-width: 639px) 22vw, 10vw"

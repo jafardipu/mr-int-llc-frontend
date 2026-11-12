@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Carousel,
   CarouselContent,
@@ -19,19 +18,29 @@ import {
   CarouselPrevious,
   CarouselNext,
 } from "@/components/ui/carousel";
-import { useProfileAvatar } from "./ProfileAvatarProvider";
-// import { useAppDispatch } from "@/redux/hooks";
-// import { logout } from "@/redux/features/authSlice";
+import { UserAvatar } from "@/components/shared/user/UserAvatar";
+import { profileRoleLabel } from "@/lib/profile";
+import { useAppDispatch } from "@/redux/hooks";
+import { logout } from "@/redux/features/authSlice";
+import { logoutAction } from "@/actions/auth.actions";
 
-export default function DashboardSidebar() {
-  const { avatarSrc } = useProfileAvatar();
+export default function DashboardSidebar({
+  name,
+  role,
+  profileUrl,
+}: {
+  name: string;
+  role?: string;
+  profileUrl: string | null;
+}) {
   const pathname = usePathname();
   const path = pathname?.split("/")[2] ?? "";
   const router = useRouter();
-//   const dispatch = useAppDispatch();
+  const dispatch = useAppDispatch();
 
-  const handleLogout = () => {
-    // dispatch(logout());
+  const handleLogout = async () => {
+    await logoutAction();
+    dispatch(logout());
     router.push("/login");
     router.refresh();
   };
@@ -83,27 +92,20 @@ export default function DashboardSidebar() {
               href="/user/profile"
               className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#99512f]"
             >
-              <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E6EAF0] bg-[#F4EDDF] text-sm font-semibold text-[#995618]">
-                {avatarSrc ? (
-                  <Image
-                    src={avatarSrc}
-                    alt=""
-                    fill
-                    unoptimized
-                    sizes="48px"
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  "RK"
-                )}
-              </span>
+              <UserAvatar
+                name={name}
+                src={profileUrl}
+                className="size-12 text-sm"
+              />
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-[#172033]">
-                  Royal Kennels
+                  {name}
                 </span>
-                <span className="mt-1 inline-flex rounded-full border border-[#cce8dc] bg-[#eaf5ef] px-2.5 py-1 text-[11px] font-medium text-[#388165]">
-                  Retail Customer
-                </span>
+                {role && (
+                  <span className="mt-1 inline-flex rounded-full border border-[#cce8dc] bg-[#eaf5ef] px-2.5 py-1 text-[11px] font-medium text-[#388165]">
+                    {profileRoleLabel(role)}
+                  </span>
+                )}
               </span>
             </Link>
             <Link

@@ -12,8 +12,8 @@ import { useRouter } from "next/navigation";
 import {
   resendSignupOtpAction,
   verifySignupOtpAction,
-} from "../../actions/auth.actions";
-import type { AuthActionState } from "../../actions/auth.types";
+} from "@/actions/auth.actions";
+import type { AuthActionState } from "@/actions/auth.types";
 
 const initialState: AuthActionState = { status: "idle", message: "" };
 
@@ -28,13 +28,25 @@ export default function VerifyOTpForm({ email }: { email: string }) {
   );
   const [codeInputs, setCodeInputs] = useState(["", "", "", "", "", ""]);
   const [inputError, setInputError] = useState("");
+  const [cooldown, setCooldown] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
-    if (state.status === "success") {
-      router.replace("/login");
-    }
-  }, [router, state.status]);
+    if (state.status !== "success") return;
+
+    router.replace(state.flow === "reset" ? "/reset-password" : "/user/dashboard");
+  }, [router, state.flow, state.status]);
+
+  useEffect(() => {
+    if (resendState.status !== "success") return;
+    setCooldown(60);
+  }, [resendState.message, resendState.status]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
 
   const handleInputChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -130,10 +142,14 @@ export default function VerifyOTpForm({ email }: { email: string }) {
       <form action={resendFormAction} className="mt-4 text-center">
         <button
           type="submit"
-          disabled={resendPending || !email}
+          disabled={resendPending || !email || cooldown > 0}
           className="font-medium text-secondary-color hover:underline disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {resendPending ? "Sending..." : "Resend code"}
+          {resendPending
+            ? "Sending..."
+            : cooldown > 0
+              ? `Resend code in ${cooldown}s`
+              : "Resend code"}
         </button>
         {resendState.message && (
           <p

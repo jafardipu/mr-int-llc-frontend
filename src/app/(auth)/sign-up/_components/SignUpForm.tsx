@@ -6,8 +6,8 @@ import logo from "@/assets/logo.png";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { registerUserAction } from "../../actions/auth.actions";
-import type { AuthActionState } from "../../actions/auth.types";
+import { registerUserAction } from "@/actions/auth.actions";
+import type { AuthActionState } from "@/actions/auth.types";
 
 const initialState: AuthActionState = { status: "idle", message: "" };
 
@@ -23,9 +23,8 @@ export default function SignupForm() {
   const router = useRouter();
 
   useEffect(() => {
-    if (state.status === "success") {
-      router.push("/verify-otp");
-    }
+    if (state.status !== "success") return;
+    router.push("/verify-otp");
   }, [router, state.status]);
 
   const validatePasswords = (event: FormEvent<HTMLFormElement>) => {
@@ -143,7 +142,7 @@ export default function SignupForm() {
               name="password"
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
-              minLength={8}
+              minLength={6}
               placeholder="••••••••"
               required
               onChange={() => setPasswordError("")}
@@ -177,7 +176,7 @@ export default function SignupForm() {
               name="confirmPassword"
               type={showConfirmPassword ? "text" : "password"}
               autoComplete="new-password"
-              minLength={8}
+              minLength={6}
               placeholder="••••••••"
               required
               onChange={() => setPasswordError("")}

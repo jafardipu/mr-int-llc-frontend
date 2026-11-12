@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
+import { changePasswordAction } from "@/actions/auth.actions";
 import PasswordFormField, {
   type ChangePasswordFormValues,
   type PasswordFieldName,
@@ -31,7 +32,7 @@ const passwordFields: {
 
 export default function ChangePasswordForm() {
   const [submitMessage, setSubmitMessage] = useState("");
-
+  const [submitError, setSubmitError] = useState("");
   const form = useForm<ChangePasswordFormValues>({
     mode: "onChange",
     defaultValues: {
@@ -41,10 +42,22 @@ export default function ChangePasswordForm() {
     },
   });
 
-  const onSubmit = () => {
-    setSubmitMessage(
-      "Password validation passed, but password updates are not connected yet.",
-    );
+  const onSubmit = async (values: ChangePasswordFormValues) => {
+    setSubmitMessage("");
+    setSubmitError("");
+    const result = await changePasswordAction({
+      oldPassword: values.currentPassword,
+      newPassword: values.newPassword,
+      confirmPassword: values.confirmPassword,
+    });
+
+    if (result.status === "error") {
+      setSubmitError(result.message);
+      return;
+    }
+
+    form.reset();
+    setSubmitMessage(result.message);
   };
 
   return (
@@ -58,12 +71,20 @@ export default function ChangePasswordForm() {
           <PasswordFormField
             key={field.name}
             {...field}
-            onValueChange={() => setSubmitMessage("")}
+            onValueChange={() => {
+              setSubmitMessage("");
+              setSubmitError("");
+            }}
           />
         ))}
 
+        {submitError && (
+          <p role="alert" className="text-sm text-red-600">
+            {submitError}
+          </p>
+        )}
         {submitMessage && (
-          <p role="status" className="text-sm text-[#a45a1a]">
+          <p role="status" className="text-sm text-[#348267]">
             {submitMessage}
           </p>
         )}

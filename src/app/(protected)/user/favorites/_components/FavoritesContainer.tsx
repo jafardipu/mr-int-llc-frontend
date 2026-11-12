@@ -1,14 +1,87 @@
-import ProductCard from "@/components/shared/cards/product/ProductCard";
-import { products } from "@/data/products";
+import PaginationSection from "@/components/shared/pagination/PaginationSection";
+import { Skeleton } from "@/components/ui/skeleton";
+import { mapCatalogProduct } from "@/lib/catalog-api";
+import { ApiRequestError } from "@/services/api-service";
+import { getMyWishlist } from "@/services/wishlist.service";
+import FavoritesEmpty from "./FavoritesEmpty";
+import FavoritesList from "./FavoritesList";
 
-export default function FavoritesContainer() {
+const pageSize = 8;
+
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function pageNumber(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+export function FavoritesSkeleton() {
   return (
-    <div className="grid grid-cols-2 items-stretch gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-      {products.map((product) => (
-        <div key={product.id}>
-          <ProductCard {...product} filled={true} />
-        </div>
+    <div
+      aria-busy="true"
+      aria-label="Loading favorites"
+      className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4"
+    >
+      {Array.from({ length: 4 }, (_, index) => (
+        <Skeleton key={index} className="aspect-[0.8/1] rounded-md" />
       ))}
     </div>
   );
+}
+
+export default async function FavoritesContainer({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = (await searchParams) ?? {};
+  const page = pageNumber(params.page);
+
+  try {
+    const result = await getMyWishlist({
+      page,
+      limit: pageSize,
+      sort: "-createdAt",
+    });
+    const items = result.data.flatMap((item) =>
+      item.product
+        ? [{ wishlistItemId: item.id, product: mapCatalogProduct(item.product) }]
+        : [],
+    );
+
+    return (
+      <div className="space-y-6">
+        {items.length === 0 ? (
+          result.data.length === 0 ? (
+            <FavoritesEmpty />
+          ) : (
+            <p className="text-sm text-[#6B7280]">
+              The wishlist response did not include displayable products.
+            </p>
+          )
+        ) : (
+          <FavoritesList items={items} />
+        )}
+        {result.meta.total > result.meta.limit && (
+          <PaginationSection
+            total={result.meta.total}
+            current={result.meta.page}
+            pageSize={result.meta.limit}
+          />
+        )}
+      </div>
+    );
+  } catch (error) {
+    const message =
+      error instanceof ApiRequestError
+        ? error.message
+        : "Unable to load your wishlist.";
+
+    return (
+      <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+        {message}
+      </p>
+    );
+  }
 }

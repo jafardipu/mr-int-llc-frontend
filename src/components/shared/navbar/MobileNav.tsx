@@ -11,9 +11,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { UserAvatar } from "@/components/shared/user/UserAvatar";
 import { navLinks } from "./NavLinks";
 
-export default function MobileNav() {
+export default function MobileNav({
+  user,
+}: {
+  user?: { name: string; profile: string | null } | null;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
@@ -61,13 +66,24 @@ export default function MobileNav() {
 
         <div className="mt-auto space-y-3 border-t border-[#e9e6df] pt-5">
           <p className="text-sm font-semibold text-[#F43F5E]">Amazing Deals</p>
-          <Link
-            href="/login"
-            onClick={() => setIsOpen(false)}
-            className="flex h-11 items-center justify-center rounded-md bg-primary-color px-4 font-medium text-secondary-color transition-colors hover:brightness-95"
-          >
-            Log In
-          </Link>
+          {user ? (
+            <Link
+              href="/user/profile"
+              onClick={() => setIsOpen(false)}
+              className="flex h-11 items-center justify-center gap-3 rounded-md bg-primary-color px-4 font-medium text-secondary-color transition-colors hover:brightness-95"
+            >
+              <UserAvatar name={user.name} src={user.profile} className="size-8 text-xs" />
+              My profile
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              onClick={() => setIsOpen(false)}
+              className="flex h-11 items-center justify-center rounded-md bg-primary-color px-4 font-medium text-secondary-color transition-colors hover:brightness-95"
+            >
+              Log In
+            </Link>
+          )}
         </div>
       </SheetContent>
     </Sheet>

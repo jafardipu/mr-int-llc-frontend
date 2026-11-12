@@ -74,8 +74,8 @@ export default function PasswordFormField({
             required: `${label} is required.`,
             ...(name !== "currentPassword" && {
               minLength: {
-                value: 8,
-                message: "Password must be at least 8 characters.",
+                value: 6,
+                message: "Password must be at least 6 characters.",
               },
             }),
             ...(name === "newPassword" && {

@@ -29,10 +29,11 @@ const authApi = baseApi.injectEndpoints({
       invalidatesTags: [tagTypes.auth],
     }),
     verifyOtp: build.mutation({
-      query: (data) => ({
+      query: ({ otp, token }: { otp: string; token: string }) => ({
         url: "/otp/verify-otp",
         method: "POST",
-        body: data,
+        body: { otp },
+        headers: { token },
       }),
       invalidatesTags: [tagTypes.auth],
     }),

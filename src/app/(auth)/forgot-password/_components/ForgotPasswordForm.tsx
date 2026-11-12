@@ -1,61 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-// import { useForgetPasswordMutation } from "@/redux/api/authApi";
-// import { LoaderIcon } from "@/icons";
-// import { errorModification } from "@/lib/errors/errorModification";
-import { toast } from "sonner";
+import { forgotPasswordAction } from "@/actions/auth.actions";
+import type { AuthActionState } from "@/actions/auth.types";
 
-// Zod validation schema
-const recoverPasswordSchema = z.object({
-  email: z
-    .string()
-    .min(1, "Email address is required")
-    .email("Please enter a valid email address"),
-});
-
-type RecoverPasswordFormData = z.infer<typeof recoverPasswordSchema>;
+const initialState: AuthActionState = { status: "idle", message: "" };
 
 export default function ForgotPasswordForm() {
   const router = useRouter();
-  // const [forgetPass, { isLoading }] = useForgetPasswordMutation();
+  const [state, formAction, pending] = useActionState(
+    forgotPasswordAction,
+    initialState,
+  );
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm<RecoverPasswordFormData>({
-    resolver: zodResolver(recoverPasswordSchema as any),
-  });
-
-  const onSubmit = async (data: RecoverPasswordFormData) => {
-    try {
-      // const res = await forgetPass(data).unwrap();
-
-      // if (res?.data?.token) {
-      //   sessionStorage.setItem("forgotPasswordToken", res?.data?.token);
-      //   toast.success(`Verification code has been sent to ${data.email}. Please check your email.`);
-      //   return;
-      // }
-
-      router.push("/verify-otp");
-      toast.warning("something went wrong. Please try again.");
-      reset();
-    } catch (error) {
-      // const errorMessage = errorModification(error);
-      // toast.error(errorMessage);
-    }
-  };
+  useEffect(() => {
+    if (state.status !== "success") return;
+    router.push("/verify-otp");
+  }, [router, state.status]);
 
   return (
     <div className="w-full xl:max-w-4xl md:max-w-xl mx-auto bg-white rounded-2xl shadow-2xl p-8 ">
-      {/* Header */}
       <div className="text-center mb-6">
         <h1 className="lg:text-3xl md:text-2xl text-xl font-bold text-gray-900 mb-4">
           Recover Password
@@ -66,9 +32,13 @@ export default function ForgotPasswordForm() {
         </p>
       </div>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Email Field */}
+      {state.status === "error" && (
+        <p role="alert" className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {state.message}
+        </p>
+      )}
+
+      <form action={formAction} className="space-y-6">
         <div>
           <label
             htmlFor="email"
@@ -78,39 +48,23 @@ export default function ForgotPasswordForm() {
           </label>
           <input
             id="email"
+            name="email"
             type="email"
+            required
             placeholder="example@gmail.com"
-            {...register("email")}
-            className={`w-full px-4 py-2.5 border rounded-lg text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none border-primary-black ${
-              errors.email
-                ? "border-red-500 focus:border-red-600 bg-red-50"
-                : "border-gray-300 focus:border-primary-black hover:border-gray-400"
-            }`}
+            className="w-full px-4 py-2.5 border rounded-lg text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none border-primary-black border-gray-300 focus:border-primary-black hover:border-gray-400"
           />
-          {errors.email && (
-            <p className="text-red-500 text-sm mt-2">{errors.email.message}</p>
-          )}
         </div>
 
-        {/* Submit Button */}
         <button
           type="submit"
-          // disabled={isLoading}
-          className="w-full bg-secondary-color hover:bg-secondary-color/85 disabled:bg-gray-600 text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 transform cursor-pointer"
+          disabled={pending}
+          className="w-full bg-secondary-color hover:bg-secondary-color/85 disabled:bg-gray-600 text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 transform cursor-pointer disabled:cursor-not-allowed"
         >
-          {/* {isLoading ? (
-            <span className="flex items-center justify-center">
-              <LoaderIcon className="-ml-1 mr-3" />
-              Sending...
-            </span>
-          ) : (
-            "Send Code"
-          )} */}
-          Send Code
+          {pending ? "Sending..." : "Send Code"}
         </button>
       </form>
 
-      {/* Back to Login Link */}
       <div className="text-center mt-6">
         <Link
           href="/login"

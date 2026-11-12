@@ -1,9 +1,10 @@
 "use client";
 
-import Image, { type ImageProps } from "next/image";
+import type { ImageProps } from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ProductPreviewImage } from "@/components/shared/product/ProductPreviewImage";
 import { CarouselThumbs } from "./CarouselThumbs";
 import "./carousel.css";
 
@@ -85,7 +86,7 @@ export default function ProductImagesCarousel({
                 aria-label={`View ${selectedSlide.alt} product details`}
                 className="absolute inset-0"
               >
-                <Image
+                <ProductPreviewImage
                   alt={selectedSlide.alt}
                   className="embla__image h-full w-full object-contain p-5 sm:p-8"
                   fill
@@ -96,7 +97,7 @@ export default function ProductImagesCarousel({
                 />
               </Link>
             ) : (
-              <Image
+              <ProductPreviewImage
                 alt={selectedSlide.alt}
                 className="embla__image h-full w-full object-contain p-5 sm:p-8"
                 fill

@@ -53,6 +53,8 @@ export default async function AllProductsContent({
     categoryId: getParamValue(params.categoryId),
     minPrice,
     maxPrice,
+    searchTerm: getParamValue(params.searchTerm),
+    deal: getParamValue(params.deal) === "true",
     sort: sort && sortableFields.has(sort) ? sort : undefined,
   };
   const [filters, products] = await Promise.all([
@@ -69,17 +71,21 @@ export default async function AllProductsContent({
     <div className="grid items-start gap-6 lg:grid-cols-[230px_minmax(0,1fr)] xl:gap-8">
       <Suspense
         fallback={
-          <aside
-            aria-busy="true"
-            aria-label="Loading product filters"
-            className="min-h-96 rounded-xl border border-[#E9E6DF] bg-white p-5"
-          />
+          <>
+            <div className="mb-4 h-10 w-28 animate-pulse rounded-md bg-[#F1F0ED] lg:hidden" />
+            <aside
+              aria-busy="true"
+              aria-label="Loading product filters"
+              className="hidden min-h-96 rounded-xl border border-[#E9E6DF] bg-white p-5 lg:block"
+            />
+          </>
         }
       >
         <ProductFilterSidebar
           brands={filters.brands}
           categories={filters.categories}
           showCatalogTags={false}
+          mobileSheet
         />
       </Suspense>
 

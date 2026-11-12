@@ -6,45 +6,26 @@ import Link from "next/link";
 import logo from "@/assets/logo.png";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { loginAction } from "../../actions/auth.actions";
-import type { AuthActionState } from "../../actions/auth.types";
-import { useAppDispatch } from "@/redux/hooks";
-import { setUser } from "@/redux/features/authSlice";
+import { loginAction } from "@/actions/auth.actions";
+import type { AuthActionState } from "@/actions/auth.types";
 
 const initialState: AuthActionState = { status: "idle", message: "" };
 
 export default function LoginForm() {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
-  const dispatch = useAppDispatch();
   const router = useRouter();
   const callbackUrl = useSearchParams().get("callbackUrl");
 
   useEffect(() => {
-    if (state.status !== "success" || !state.accessToken) return;
-
-    dispatch(
-      setUser({
-        user: state.user ?? null,
-        token: state.accessToken,
-        refreshToken: state.refreshToken,
-      }),
-    );
+    if (state.status !== "success") return;
 
     const destination =
       callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
         ? callbackUrl
         : "/user/dashboard";
     router.replace(destination);
-  }, [
-    callbackUrl,
-    dispatch,
-    router,
-    state.accessToken,
-    state.refreshToken,
-    state.status,
-    state.user,
-  ]);
+  }, [callbackUrl, router, state.status]);
 
   return (
     <div className="w-full xl:max-w-4xl md:max-w-xl mx-auto rounded-lg bg-white p-8 shadow-lg">

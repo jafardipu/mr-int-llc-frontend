@@ -1,8 +1,14 @@
+import { Suspense } from "react";
 import SectionTitle from "@/components/shared/section/SectionTitle";
-import React from "react";
-import FavoritesContainer from "./_components/FavoritesContainer";
+import FavoritesContainer, {
+  FavoritesSkeleton,
+} from "./_components/FavoritesContainer";
 
-export default function FavoritePage() {
+type FavoritesPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default function FavoritePage({ searchParams }: FavoritesPageProps) {
   return (
     <div className="space-y-6 lg:space-y-7">
       <SectionTitle
@@ -12,7 +18,9 @@ export default function FavoritePage() {
         className="lg:space-y-1.5 space-y-1"
         subTitleClass="text-[#6B7280]"
       />
-      <FavoritesContainer />
+      <Suspense fallback={<FavoritesSkeleton />}>
+        <FavoritesContainer searchParams={searchParams} />
+      </Suspense>
     </div>
   );
 }

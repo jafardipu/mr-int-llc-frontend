@@ -17,7 +17,9 @@ type ProductDetailsPageProps = {
 
 async function getProduct(id: string) {
   const localProduct = allProducts.find((product) => product.id === id);
-  return localProduct ?? (await getCatalogProductById(id));
+  if (localProduct) return localProduct;
+
+  return getCatalogProductById(id);
 }
 
 export function generateStaticParams() {
@@ -132,7 +134,10 @@ async function ProductDetailsContent({ params }: ProductDetailsPageProps) {
                     : "Availability confirmed on request"}
                 </p>
               </div>
-              <ProductFavoriteButton productTitle={product.title} />
+              <ProductFavoriteButton
+                productId={product.id}
+                productTitle={product.title}
+              />
             </div>
 
             <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">

@@ -4,19 +4,16 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff, Check } from "lucide-react";
-// import { useResetPasswordMutation } from "@/redux/api/authApi";
-// import { LoaderIcon } from "@/icons";
-import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-// import { errorModification } from "@/lib/errors/errorModification";
+import { resetPasswordAction } from "@/actions/auth.actions";
 
 const resetPasswordSchema = z
   .object({
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z
       .string()
-      .min(8, "Password must be at least 8 characters"),
+      .min(6, "Password must be at least 6 characters"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -28,7 +25,8 @@ type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 export default function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  // const [resetPass, { isLoading }] = useResetPasswordMutation();
+  const [submitError, setSubmitError] = useState("");
+  const [pending, setPending] = useState(false);
   const router = useRouter();
 
   const formResolver = zodResolver(resetPasswordSchema as any);
@@ -44,20 +42,21 @@ export default function ResetPasswordForm() {
   });
 
   const onSubmit = async (data: ResetPasswordFormValues) => {
-    const formattedData = {
+    setPending(true);
+    setSubmitError("");
+    const result = await resetPasswordAction({
       newPassword: data.password,
       confirmPassword: data.confirmPassword,
-    };
-    try {
-      // const res = await resetPass(formattedData).unwrap();
-      // sessionStorage.removeItem("resetPasswordToken");
-      // toast.success("Successfully reset your password! Please login.");
-      router.replace("/login");
-      reset();
-    } catch (error) {
-      // const errorMessage = errorModification(error);
-      // toast.error(errorMessage);
+    });
+    setPending(false);
+
+    if (result.status === "error") {
+      setSubmitError(result.message);
+      return;
     }
+
+    reset();
+    router.replace("/login");
   };
 
   return (
@@ -71,6 +70,12 @@ export default function ResetPasswordForm() {
       </p>
 
       {/* Form */}
+      {submitError && (
+        <p role="alert" className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {submitError}
+        </p>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Set Password */}
         <div>
@@ -137,18 +142,10 @@ export default function ResetPasswordForm() {
         {/* Submit Button */}
         <button
           type="submit"
-          // disabled={isLoading}
+          disabled={pending}
           className="w-full rounded-lg bg-secondary-color py-2.5 font-semibold text-white transition-colors hover:bg-secondary-color/90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {/* {isLoading ? (
-            <span className="flex items-center justify-center">
-              <LoaderIcon className="-ml-1 mr-3" />
-              <span className="sr-only">Resetting password...</span>
-            </span>
-          ) : (
-            "Reset password"
-          )} */}
-          Reset password
+          {pending ? "Resetting..." : "Reset password"}
         </button>
       </form>
     </div>

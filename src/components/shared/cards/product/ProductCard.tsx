@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import { TProducts } from "@/types/products";
 import FavoriteIcon from "@/components/utils/favorite-icon";
+import { ProductPreviewImage } from "@/components/shared/product/ProductPreviewImage";
 
 function formatPrice(value: number | string) {
   if (typeof value === "string") return value;
@@ -23,15 +23,13 @@ export default function ProductCard({
   badge,
   soldCount,
   stockCount,
-  // initialFavorite = false,
-  // onFavoriteChange,
-  filled = false,
-}: TProducts & { filled?: boolean }) {
+  wishlistItemId,
+}: TProducts & { wishlistItemId?: string }) {
   const safeRating = Math.min(5, Math.max(0, rating));
 
   const productImage = (
     <div className="relative aspect-[1.36/1] w-full">
-      <Image
+      <ProductPreviewImage
         src={image}
         alt={imageAlt}
         fill
@@ -67,7 +65,7 @@ export default function ProductCard({
           </span>
         )}
 
-        <FavoriteIcon filled={filled} />
+        <FavoriteIcon productId={id} wishlistItemId={wishlistItemId} />
       </div>
 
       <div className="flex flex-1 flex-col xl:p-6 lg:p-4 p-3  ">

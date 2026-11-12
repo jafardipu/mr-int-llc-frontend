@@ -3,37 +3,103 @@
 import { Heart, Minus, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  addToWishlistAction,
+  removeFromWishlistAction,
+} from "@/actions/wishlist.actions";
+import { runFavoriteAction } from "@/components/wishlist/favorite-toast";
+import { useWishlist } from "@/components/wishlist/WishlistProvider";
 
 type ProductFavoriteButtonProps = {
+  productId: string;
   productTitle: string;
 };
 
 export function ProductFavoriteButton({
+  productId,
   productTitle,
 }: ProductFavoriteButtonProps) {
-  const [isFavorite, setIsFavorite] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const wishlist = useWishlist();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const wishlistItemId = wishlist.items[productId];
+  const isFavorite = Boolean(wishlistItemId);
+
+  if (wishlist.ready && !wishlist.canUse) return null;
+
+  const toggle = async () => {
+    if (!wishlist.isLoggedIn && wishlist.ready) {
+      router.push(`/login?callbackUrl=${encodeURIComponent(pathname || `/products/${productId}`)}`);
+      return;
+    }
+    if (!wishlist.ready || pending) return;
+
+    setPending(true);
+    setError("");
+
+    if (wishlistItemId) {
+      const result = await runFavoriteAction("Removing from favorites...", () =>
+        removeFromWishlistAction(wishlistItemId),
+      );
+      setPending(false);
+      if (result.status === "error") {
+        setError(result.message);
+        if (result.statusCode === 404) wishlist.forget(productId);
+        return;
+      }
+      wishlist.forget(productId);
+      router.refresh();
+      return;
+    }
+
+    const result = await runFavoriteAction("Adding to favorites...", () =>
+      addToWishlistAction(productId),
+    );
+    setPending(false);
+    if (result.status === "error" || !result.item) {
+      setError(result.message);
+      return;
+    }
+    wishlist.remember(result.item.productId, result.item.id);
+    router.refresh();
+  };
 
   return (
-    <button
-      aria-label={
-        isFavorite
-          ? `Remove ${productTitle} from favorites`
-          : `Add ${productTitle} to favorites`
-      }
-      aria-pressed={isFavorite}
-      className="inline-flex shrink-0 items-center gap-2 rounded-full px-2 py-2 text-sm font-medium text-[#DC1638] transition hover:bg-[#fbf6f1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color group"
-      onClick={() => setIsFavorite((favorite) => !favorite)}
-      type="button"
-    >
-      <Heart
-        aria-hidden="true"
-        className="size-4 group-hover:fill-[#DC1638] group-hover:stroke-[#DC1638]"
-        fill={isFavorite ? "currentColor" : "none"}
-      />
-      <span className="hidden sm:inline">
-        {isFavorite ? "Added to favorites" : "Add to favorite"}
-      </span>
-    </button>
+    <div className="shrink-0">
+      <button
+        aria-label={
+          isFavorite
+            ? `Remove ${productTitle} from favorites`
+            : `Add ${productTitle} to favorites`
+        }
+        aria-pressed={isFavorite}
+        disabled={pending}
+        className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm font-medium text-[#DC1638] transition hover:bg-[#fbf6f1] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color group disabled:cursor-wait"
+        onClick={() => void toggle()}
+        type="button"
+      >
+        <Heart
+          aria-hidden="true"
+          className="size-4 group-hover:fill-[#DC1638] group-hover:stroke-[#DC1638]"
+          fill={isFavorite ? "currentColor" : "none"}
+        />
+        <span className="hidden sm:inline">
+          {pending
+            ? "Saving..."
+            : isFavorite
+              ? "Added to favorites"
+              : "Add to favorite"}
+        </span>
+      </button>
+      {error && (
+        <p role="alert" className="mt-1 max-w-48 text-xs text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
