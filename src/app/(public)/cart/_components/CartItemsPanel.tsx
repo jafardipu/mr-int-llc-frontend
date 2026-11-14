@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
-import type { CartItem } from "../../../../data/cart.data";
+import Link from "next/link";
+import type { CartItem } from "@/data/cart.data";
 import CartItemRow from "./CartItemRow";
 
 interface CartItemsPanelProps {
@@ -50,8 +51,19 @@ export default function CartItemsPanel({
           ))}
         </div>
       ) : (
-        <div className="mt-5 rounded-xl border border-dashed border-[#E5E3DE] px-5 py-12 text-center text-sm text-[#77766F]">
-          Your cart is empty.
+        <div className="mt-5 flex flex-col items-center justify-center rounded-xl border border-dashed border-[#E5E3DE] px-5 py-14 text-center">
+          <p className="text-base font-semibold text-[#24231F]">
+            Your cart is empty
+          </p>
+          <p className="mt-1 text-sm text-[#77766F]">
+            Looks like you haven&apos;t added any products to your cart yet.
+          </p>
+          <Link
+            href="/products"
+            className="mt-5 inline-flex items-center justify-center rounded-full bg-secondary-color px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#5a3614]"
+          >
+            Start Shopping
+          </Link>
         </div>
       )}
     </section>

@@ -56,9 +56,7 @@ export default async function FavoritesContainer({
           result.data.length === 0 ? (
             <FavoritesEmpty />
           ) : (
-            <p className="text-sm text-[#6B7280]">
-              The wishlist response did not include displayable products.
-            </p>
+            <FavoritesEmpty message="The wishlist response did not include displayable products." />
           )
         ) : (
           <FavoritesList items={items} />

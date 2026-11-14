@@ -1,49 +1,40 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import {
+  changeQuantity,
+  clearCart,
+  removeFromCart,
+  selectCartItems,
+  selectSelectedCount,
+  selectSelectedSubtotal,
+  setItemSelected,
+} from "@/redux/features/cartSlice";
 import CartItemsPanel from "./CartItemsPanel";
 import CartSummary from "./CartSummary";
-import { initialCartItems, type CartItem } from "../../../../data/cart.data";
+import type { CartItem } from "@/data/cart.data";
 
 export default function CartPageContent() {
-  const [items, setItems] = useState(initialCartItems);
-
-  const { selectedItemCount, subtotal } = useMemo(() => {
-    const selectedItems = items.filter((item) => item.selected);
-
-    return {
-      selectedItemCount: selectedItems.reduce(
-        (count, item) => count + item.quantity,
-        0
-      ),
-      subtotal: selectedItems.reduce(
-        (total, item) => total + item.price * item.quantity,
-        0
-      ),
-    };
-  }, [items]);
+  const dispatch = useAppDispatch();
+  const items = useAppSelector(selectCartItems);
+  const selectedItemCount = useAppSelector(selectSelectedCount);
+  const subtotal = useAppSelector(selectSelectedSubtotal);
 
   const handleQuantityChange = (id: string, change: number) => {
-    setItems((currentItems) =>
-      currentItems.map((item) =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity + change) }
-          : item
-      )
-    );
+    dispatch(changeQuantity({ id, change }));
   };
 
   const handleRemove = (id: string) => {
-    setItems((currentItems) => currentItems.filter((item) => item.id !== id));
+    dispatch(removeFromCart(id));
   };
 
-  const handleDeleteAll = () => setItems([]);
+  const handleDeleteAll = () => {
+    dispatch(clearCart());
+  };
 
   const handleItemChange = (updatedItem: CartItem) => {
-    setItems((currentItems) =>
-      currentItems.map((item) =>
-        item.id === updatedItem.id ? updatedItem : item
-      )
+    dispatch(
+      setItemSelected({ id: updatedItem.id, selected: updatedItem.selected })
     );
   };
 

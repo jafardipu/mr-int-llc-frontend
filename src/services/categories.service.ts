@@ -1,6 +1,6 @@
 import "server-only";
 
-import { apiGet } from "@/services/api-service";
+import { ApiRequestError, apiGet } from "@/services/api-service";
 import {
   collectPages,
   isRecord,
@@ -41,23 +41,45 @@ export interface CategoryListQuery {
   status?: "active" | "inactive";
 }
 
-function isCategory(value: unknown): value is Category {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    (typeof value.image === "string" || value.image === null) &&
-    typeof value.status === "string" &&
-    typeof value.isDeleted === "boolean"
-  );
-}
-
-function isCategoryDetail(value: unknown): value is CategoryDetail {
-  if (!isRecord(value) || !Array.isArray(value.products)) {
-    return false;
+export function readCategory(value: unknown): Category | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string"
+  ) {
+    return null;
   }
 
-  return value.products.every(isProduct) && isCategory(value);
+  const count = isRecord(value._count) ? value._count.products : 0;
+
+  return {
+    id: value.id,
+    name: value.name,
+    image:
+      typeof value.image === "string" && value.image.trim()
+        ? value.image
+        : null,
+    status: value.status === "inactive" ? "inactive" : "active",
+    isDeleted: value.isDeleted === true,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : "",
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+    _count: { products: typeof count === "number" ? count : 0 },
+  };
+}
+
+function isCategory(value: unknown): value is Category {
+  return readCategory(value) !== null;
+}
+
+function readCategoryDetail(value: unknown): CategoryDetail | null {
+  const category = readCategory(value);
+  if (!category || !isRecord(value)) return null;
+
+  const products = Array.isArray(value.products)
+    ? value.products.filter(isProduct)
+    : [];
+
+  return { ...category, products };
 }
 
 export async function getCategories(
@@ -76,7 +98,14 @@ export async function getCategories(
     tags: [categoriesTag],
   });
 
-  return parseApiPage(result, "categories", isCategory);
+  const pageResult = parseApiPage(result, "categories", isCategory);
+  return {
+    ...pageResult,
+    data: pageResult.data.flatMap((item) => {
+      const category = readCategory(item);
+      return category && !category.isDeleted ? [category] : [];
+    }),
+  };
 }
 
 export async function getAllCategories(
@@ -85,11 +114,21 @@ export async function getAllCategories(
   return collectPages((page, limit) => getCategories({ ...query, page, limit }));
 }
 
-export async function getCategoryById(id: string): Promise<CategoryDetail> {
+export async function getCategoryById(
+  id: string,
+): Promise<CategoryDetail | null> {
   const resource = `categories/${encodeURIComponent(id)}`;
-  const result: unknown = await apiGet(resource, {
-    tags: [categoriesTag],
-  });
 
-  return parseApiItem(result, resource, isCategoryDetail);
+  try {
+    const result: unknown = await apiGet(resource, {
+      tags: [categoriesTag],
+    });
+    const category = readCategoryDetail(parseApiItem(result, resource, isRecord));
+    return category && !category.isDeleted ? category : null;
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }

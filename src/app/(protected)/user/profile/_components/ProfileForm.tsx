@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { Camera, Mail, Phone, UserRound } from "lucide-react";
+import { Camera, Mail, Package, Phone, UserRound } from "lucide-react";
 import Link from "next/link";
+import EmptyState from "@/components/shared/empty-state/EmptyState";
 import { updateMyProfileAction } from "@/actions/profile.actions";
 import { UserAvatar } from "@/components/shared/user/UserAvatar";
 import { profileRoleLabel } from "@/lib/profile";
@@ -288,7 +289,7 @@ function RecentOrders({ orders }: { orders: MyProfile["orders"] }) {
         </Link>
       </div>
       {orders.length === 0 ? (
-        <p className="text-sm text-[#7b8493]">No recent orders.</p>
+        <EmptyState icon={Package} message="No recent orders." className="min-h-40" />
       ) : (
         <ul className="divide-y divide-[#E1E5EA] rounded-xl border border-[#E1E5EA] bg-white">
           {orders.map((order) => (

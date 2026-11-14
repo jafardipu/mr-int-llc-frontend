@@ -39,6 +39,30 @@ export interface ProductCategory {
   updatedAt?: string;
 }
 
+export interface ProductVolumeTier {
+  minQty: number;
+  maxQty?: number | null;
+  discountPercent?: number | null;
+  unitPrice?: number | null;
+}
+
+export interface ProductReviewUser {
+  id: string;
+  name: string;
+  profile: string | null;
+}
+
+export interface ProductReview {
+  id: string;
+  userId: string;
+  productId: string;
+  rating: number;
+  review: string;
+  createdAt: string;
+  updatedAt: string;
+  user: ProductReviewUser | null;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -57,7 +81,7 @@ export interface Product {
   subcategory: string | null;
   amazonUrl: string | null;
   walmartUrl: string | null;
-  volumeTiers: unknown[] | null;
+  volumeTiers: ProductVolumeTier[] | null;
   status: string;
   avgRating: number;
   totalReview: number;
@@ -73,7 +97,10 @@ export interface Product {
 }
 
 export interface ProductDetail extends Product {
-  reviews: unknown[];
+  reviews: ProductReview[];
+  displayPrice: number;
+  displayMinQty: number;
+  isWholesale: boolean;
 }
 
 export type ProductsResponse = ApiResponse<ApiPage<Product>>;
@@ -94,9 +121,83 @@ export interface ProductListQuery {
 function isProductImage(value: unknown): value is ProductImage {
   return (
     isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.productId === "string" &&
     typeof value.url === "string" &&
     typeof value.isPrimary === "boolean"
   );
+}
+
+function readVolumeTier(value: unknown): ProductVolumeTier[] | null {
+  if (value === null || value === undefined) return null;
+  if (!Array.isArray(value)) return null;
+
+  const tiers = value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.minQty !== "number") return [];
+    return [
+      {
+        minQty: item.minQty,
+        maxQty:
+          typeof item.maxQty === "number"
+            ? item.maxQty
+            : item.maxQty === null
+              ? null
+              : undefined,
+        discountPercent:
+          typeof item.discountPercent === "number"
+            ? item.discountPercent
+            : item.discountPercent === null
+              ? null
+              : undefined,
+        unitPrice:
+          typeof item.unitPrice === "number"
+            ? item.unitPrice
+            : item.unitPrice === null
+              ? null
+              : undefined,
+      },
+    ];
+  });
+
+  return tiers;
+}
+
+function readReview(value: unknown): ProductReview | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.userId !== "string" ||
+    typeof value.productId !== "string" ||
+    typeof value.rating !== "number" ||
+    typeof value.review !== "string"
+  ) {
+    return null;
+  }
+
+  const user =
+    isRecord(value.user) &&
+    typeof value.user.id === "string" &&
+    typeof value.user.name === "string"
+      ? {
+          id: value.user.id,
+          name: value.user.name,
+          profile:
+            typeof value.user.profile === "string" && value.user.profile.trim()
+              ? value.user.profile
+              : null,
+        }
+      : null;
+
+  return {
+    id: value.id,
+    userId: value.userId,
+    productId: value.productId,
+    rating: value.rating,
+    review: value.review,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : "",
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+    user,
+  };
 }
 
 export function isProduct(value: unknown): value is Product {
@@ -127,16 +228,45 @@ export function isProduct(value: unknown): value is Product {
   );
 }
 
-function isProductDetail(value: unknown): value is ProductDetail {
-  return isProduct(value);
+function readProductDetail(value: unknown): ProductDetail | null {
+  if (!isProduct(value) || value.isDeleted) return null;
+
+  const displayPrice =
+    typeof value.displayPrice === "number"
+      ? value.displayPrice
+      : value.isDeal && value.dealPrice !== null
+        ? value.dealPrice
+        : value.retailPrice;
+  const displayMinQty =
+    typeof value.displayMinQty === "number" && value.displayMinQty > 0
+      ? value.displayMinQty
+      : 1;
+  const isWholesale = value.isWholesale === true;
+  const rawReviews = (value as Product & Record<string, unknown>).reviews;
+  const reviews = Array.isArray(rawReviews)
+    ? rawReviews.flatMap((item: unknown) => {
+        const review = readReview(item);
+        return review ? [review] : [];
+      })
+    : [];
+
+  return {
+    ...value,
+    volumeTiers: readVolumeTier(value.volumeTiers),
+    reviews,
+    displayPrice,
+    displayMinQty,
+    isWholesale,
+  };
 }
 
 async function authRequest() {
   const accessToken = (await cookies()).get(accessTokenCookie)?.value;
-  if (!accessToken) return {};
 
   return {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    ...(accessToken
+      ? { headers: { Authorization: `Bearer ${accessToken}` } }
+      : {}),
     cache: "no-store" as const,
   };
 }
@@ -174,7 +304,7 @@ export async function getProductById(
       ...(await authRequest()),
     });
 
-    return parseApiItem(result, resource, isProductDetail);
+    return readProductDetail(parseApiItem(result, resource, isRecord));
   } catch (error) {
     if (error instanceof ApiRequestError && error.status === 404) {
       return null;

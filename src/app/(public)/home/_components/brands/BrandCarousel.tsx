@@ -1,19 +1,16 @@
 "use client";
 
-import Container from "@/components/container/Container";
-import SectionTitle from "@/components/shared/section/SectionTitle";
+import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
+import BrandLogo from "@/app/(public)/shop-by-brand/_components/BrandLogo";
 
-const brands = [
-  { name: "logo", style: "text-3xl font-semibold tracking-tight text-black" },
-  { name: "SAMSUNG", style: "text-xl font-bold tracking-tight text-[#ead9bf]" },
-  { name: "NIKE", style: "text-3xl font-black italic tracking-tight text-black" },
-  { name: "Levi's", style: "text-xl font-bold text-red-600" },
-  { name: "P&G", style: "font-serif text-3xl font-bold text-[#ead9bf]" },
-  { name: "L'ORÉAL", style: "font-serif text-lg font-bold tracking-wide text-[#29231e]" },
-];
+export type BrandCard = {
+  id: string;
+  name: string;
+  image: string | null;
+};
 
-export default function Brands() {
+export default function BrandCarousel({ brands }: { brands: BrandCard[] }) {
   const carouselRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -97,9 +94,8 @@ export default function Brands() {
   };
 
   return (
-    <section
-      aria-label="Featured brands"
-      className="py-6 sm:py-8"
+    <div
+      className="mt-7 lg:mt-10"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onFocusCapture={() => setIsPaused(true)}
@@ -109,36 +105,37 @@ export default function Brands() {
         }
       }}
     >
-      <Container>
-         <SectionTitle title="Shop by Brand" subTitle="We work with trusted global brands to bring you the best products." btnHref="/shop-by-brand" />
-        <div
-          ref={carouselRef}
-          className="flex touch-pan-y snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-none sm:gap-5 lg:mt-10 mt-7 [&::-webkit-scrollbar]:hidden"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onClickCapture={(event) => {
-            if (draggedRef.current) {
-              event.preventDefault();
-              event.stopPropagation();
-              draggedRef.current = false;
-            }
-          }}
-          role="region"
-          aria-roledescription="carousel"
-          tabIndex={0}
-        >
-          {brands.map((brand) => (
-            <div
-              key={brand.name}
-              className="flex h-18 w-42 shrink-0 snap-start items-center justify-center rounded-2xl border-2 border-[#e8e5e2] bg-white sm:h-22.5 sm:w-[calc((100%-40px)/3)] lg:w-[calc((100%-100px)/6)]"
-            >
-              <span className={brand.style}>{brand.name}</span>
-            </div>
-          ))}
-        </div>
-      </Container>
-    </section>
+      <div
+        ref={carouselRef}
+        className="flex touch-pan-y snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-none sm:gap-5 [&::-webkit-scrollbar]:hidden"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClickCapture={(event) => {
+          if (draggedRef.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            draggedRef.current = false;
+          }
+        }}
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="Featured brands"
+        tabIndex={0}
+      >
+        {brands.map((brand) => (
+          <Link
+            key={brand.id}
+            href={`/shop-by-brand/${brand.id}`}
+            aria-label={`Shop ${brand.name} products`}
+            className="flex h-18 w-42 shrink-0 snap-start items-center justify-center rounded-2xl border-2 border-[#e8e5e2] bg-white sm:h-22.5 sm:w-[calc((100%-40px)/3)] lg:w-[calc((100%-100px)/6)]"
+            draggable={false}
+          >
+            <BrandLogo name={brand.name} image={brand.image} />
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }

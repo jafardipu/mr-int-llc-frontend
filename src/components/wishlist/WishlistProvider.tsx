@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { loadWishlistIndexAction } from "@/actions/wishlist.actions";
+import LoginPromptModal from "./LoginPromptModal";
 
 type WishlistContextValue = {
   ready: boolean;
@@ -17,6 +18,7 @@ type WishlistContextValue = {
   items: Record<string, string>;
   remember: (productId: string, wishlistItemId: string) => void;
   forget: (productId: string) => void;
+  openLoginModal: (callbackUrl?: string) => void;
 };
 
 const WishlistContext = createContext<WishlistContextValue | null>(null);
@@ -26,6 +28,8 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [canUse, setCanUse] = useState(true);
   const [items, setItems] = useState<Record<string, string>>({});
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [loginCallbackUrl, setLoginCallbackUrl] = useState("/products");
 
   useEffect(() => {
     let active = true;
@@ -43,6 +47,17 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const openLoginModal = (callbackUrl?: string) => {
+    if (callbackUrl) {
+      setLoginCallbackUrl(callbackUrl);
+    }
+    setIsLoginModalOpen(true);
+  };
+
+  const closeLoginModal = () => {
+    setIsLoginModalOpen(false);
+  };
+
   const value = useMemo<WishlistContextValue>(
     () => ({
       ready,
@@ -59,12 +74,20 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
           return next;
         });
       },
+      openLoginModal,
     }),
     [ready, isLoggedIn, canUse, items],
   );
 
   return (
-    <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>
+    <WishlistContext.Provider value={value}>
+      {children}
+      <LoginPromptModal
+        isOpen={isLoginModalOpen}
+        onClose={closeLoginModal}
+        callbackUrl={loginCallbackUrl}
+      />
+    </WishlistContext.Provider>
   );
 }
 

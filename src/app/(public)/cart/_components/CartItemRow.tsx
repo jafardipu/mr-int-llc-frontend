@@ -1,6 +1,7 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Check, Minus, Plus, Trash2 } from "lucide-react";
-import type { CartItem } from "../../../../data/cart.data";
+import type { CartItem } from "@/data/cart.data";
 
 interface CartItemRowProps {
   item: CartItem;
@@ -19,6 +20,10 @@ export default function CartItemRow({
   onQuantityChange,
   onItemChange,
 }: CartItemRowProps) {
+  const productHref = item.productId ? `/products/${item.productId}` : null;
+  const isMaxQuantity =
+    item.stockCount !== undefined && item.quantity >= item.stockCount;
+
   return (
     <article className="grid grid-cols-[24px_72px_minmax(0,1fr)] items-center gap-3 border-b border-[#EEEDE9] py-4 sm:grid-cols-[24px_80px_minmax(0,1fr)_112px] sm:gap-4 sm:py-5">
       <button
@@ -36,19 +41,45 @@ export default function CartItemRow({
       </button>
 
       <div className="relative flex size-18 items-center justify-center rounded-md bg-[#F7F7F7] sm:size-20">
-        <Image
-          src={item.image}
-          alt={item.imageAlt}
-          fill
-          sizes="80px"
-          className="object-contain p-2.5"
-        />
+        {productHref ? (
+          <Link
+            href={productHref}
+            className="relative block size-full cursor-pointer"
+          >
+            <Image
+              src={item.image}
+              alt={item.imageAlt || item.title}
+              fill
+              sizes="80px"
+              className="object-contain p-2.5 transition hover:scale-105"
+            />
+          </Link>
+        ) : (
+          <Image
+            src={item.image}
+            alt={item.imageAlt || item.title}
+            fill
+            sizes="80px"
+            className="object-contain p-2.5"
+          />
+        )}
       </div>
 
       <div className="min-w-0 self-center">
-        <h2 className="truncate text-sm font-semibold text-[#24231F] sm:text-base">
-          {item.title}
-        </h2>
+        {productHref ? (
+          <Link
+            href={productHref}
+            className="hover:text-secondary-color transition-colors"
+          >
+            <h2 className="truncate text-sm font-semibold text-[#24231F] sm:text-base">
+              {item.title}
+            </h2>
+          </Link>
+        ) : (
+          <h2 className="truncate text-sm font-semibold text-[#24231F] sm:text-base">
+            {item.title}
+          </h2>
+        )}
         <p className="mt-1 text-xs text-[#A3A3A3] sm:text-sm">
           <span className="text-[#A3A3A3]">Color: </span>
           <span className="text-[#404040] font-medium">{item?.variant}</span>
@@ -87,8 +118,9 @@ export default function CartItemRow({
             <button
               type="button"
               onClick={() => onQuantityChange(item.id, 1)}
+              disabled={isMaxQuantity}
               aria-label={`Increase ${item.title} quantity`}
-              className="flex size-7 cursor-pointer items-center justify-center rounded-full"
+              className="flex size-7 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus aria-hidden="true" className="size-3" />
             </button>

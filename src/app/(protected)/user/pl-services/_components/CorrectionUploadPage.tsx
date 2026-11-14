@@ -1,28 +1,42 @@
 "use client";
 
 import { useState, type DragEvent } from "react";
-import { AlertCircle, CloudUpload, FileText } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, CloudUpload, FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import PrepRequestFileCard from "./PrepRequestFileCard";
 import PrepRequestHeader from "./PrepRequestHeader";
+import type { PrepServiceRequest } from "@/types/prepService";
 import type { PrepRequest } from "../_data/prep-requests";
+import { useCreatePrepService } from "@/hooks/usePrepService";
 
-const acceptedFile = /\.(csv|tsv)$/i;
+type RequestType = PrepServiceRequest | PrepRequest;
+
+const acceptedFile = /\.(csv|tsv|pdf|xlsx|xls|png|jpg|jpeg)$/i;
 
 export default function CorrectionUploadPage({
   request,
 }: {
-  request: PrepRequest;
+  request: RequestType;
 }) {
+  const router = useRouter();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [message, setMessage] = useState("");
+  const [correctionNote, setCorrectionNote] = useState("");
+  const createPrepService = useCreatePrepService();
+
+  const adminNote =
+    "adminNote" in request && request.adminNote
+      ? request.adminNote
+      : "correctionNotes" in request && request.correctionNotes?.length
+        ? request.correctionNotes.join("; ")
+        : "The admin has requested corrections for this request. Please upload updated files.";
 
   const selectFile = (file?: File) => {
-    setMessage("");
     if (!file) return;
     if (!acceptedFile.test(file.name)) {
       setSelectedFile(null);
-      setMessage("Please choose a CSV or TSV file.");
+      toast.error("Please upload a supported file (CSV, TSV, PDF, XLSX, images).");
       return;
     }
     setSelectedFile(file);
@@ -34,59 +48,93 @@ export default function CorrectionUploadPage({
     selectFile(event.dataTransfer.files[0]);
   };
 
-  const submitMockUpload = () => {
-    if (selectedFile) {
-      setMessage(
-        "The file is selected, but uploading is not connected in this demo.",
-      );
+  const handleSubmitCorrection = async () => {
+    if (!selectedFile) {
+      toast.error("Please select a file to upload.");
+      return;
+    }
+
+    try {
+      const serviceType =
+        "serviceType" in request && request.serviceType
+          ? `${request.serviceType} (Correction)`
+          : "Correction Submission";
+
+      await createPrepService.mutateAsync({
+        serviceType,
+        notes: `Correction for Request #${request.id}: ${correctionNote.trim() || "Updated files attached."}`,
+        attachments: [selectedFile],
+      });
+
+      router.push("/user/pl-services");
+    } catch {
+      // Handled by mutation onError toast
     }
   };
 
   return (
-    <main className="w-full">
+    <main className="w-full space-y-6">
       <PrepRequestHeader request={request} />
 
+      {/* Alert Header */}
       <section
         role="status"
-        className="mt-5 flex gap-3 rounded-xl border border-[#fed7aa] bg-[#fff7ed] px-4 py-4 text-[#c2410c] sm:px-5"
+        className="flex gap-3 rounded-xl border border-[#fed7aa] bg-[#fff7ed] px-4 py-4 text-[#c2410c] sm:px-5"
       >
         <AlertCircle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div>
           <p className="text-sm font-semibold">Correction Required</p>
           <p className="mt-1 text-sm leading-5">
-            The admin has reviewed your file and requested a correction.
+            The admin has reviewed your submission and requested corrections.
           </p>
         </div>
       </section>
 
-      <section className="mt-5 rounded-xl border border-[#dfe6ef] bg-white px-4 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.06)] sm:px-5">
-        <h2 className="text-xs font-bold tracking-wide text-[#64748b]">
-          ADMIN&apos;S CORRECTION NOTES
+      {/* Admin Notes Section */}
+      <section className="rounded-xl border border-[#dfe6ef] bg-white px-4 py-4 shadow-xs sm:px-5">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-[#64748b]">
+          ADMIN&apos;S CORRECTION INSTRUCTIONS
         </h2>
-        <p className="mt-3 text-sm text-[#64748b]">
-          Please check the following issues and upload a corrected file:
-        </p>
-        <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-[#8796ad]">
-          {(request.correctionNotes ?? []).map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
+        <div className="mt-3 rounded-lg bg-amber-50/70 border border-amber-200 p-3.5 text-sm text-amber-900 leading-relaxed whitespace-pre-line">
+          {adminNote}
+        </div>
       </section>
 
-      <div className="mt-5 space-y-5">
+      <div className="space-y-6">
         <PrepRequestFileCard request={request} />
 
-        <section aria-labelledby="upload-corrected-file-title">
+        <section
+          aria-labelledby="upload-corrected-file-title"
+          className="rounded-xl border border-[#dfe6ef] bg-white p-5 sm:p-6 shadow-xs space-y-4"
+        >
           <h2
             id="upload-corrected-file-title"
-            className="mb-2.5 text-sm font-semibold text-[#334155]"
+            className="text-base font-semibold text-[#111827]"
           >
             Upload Corrected File
           </h2>
+
+          <div>
+            <label
+              htmlFor="correction-note"
+              className="block text-xs font-semibold text-[#374151] mb-1.5"
+            >
+              Response / Note to Admin (Optional)
+            </label>
+            <textarea
+              id="correction-note"
+              rows={2}
+              value={correctionNote}
+              onChange={(e) => setCorrectionNote(e.target.value)}
+              placeholder="Explain the changes made in this corrected submission..."
+              className="w-full rounded-xl border border-[#e1e5eb] bg-white p-3 text-sm text-[#374151] outline-none focus:border-[#995618] focus:ring-2 focus:ring-[#995618]/15"
+            />
+          </div>
+
           <input
             id="corrected-prep-file"
             type="file"
-            accept=".csv,.tsv,text/csv,text/tab-separated-values"
+            accept=".csv,.tsv,.pdf,.xlsx,.xls,.png,.jpg,.jpeg,text/csv,text/tab-separated-values"
             className="sr-only"
             onChange={(event) => selectFile(event.target.files?.[0])}
           />
@@ -106,10 +154,10 @@ export default function CorrectionUploadPage({
               }
             }}
             onDrop={handleDrop}
-            className={`flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-8 text-center transition-colors sm:min-h-48 ${
+            className={`flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-8 text-center transition-colors ${
               isDragging
                 ? "border-[#9b5317] bg-[#f4e5d9]"
-                : "border-[#ead9cb] bg-[#f7eee8]"
+                : "border-[#ead9cb] bg-[#fcf8f5] hover:bg-[#f7eee8]"
             }`}
           >
             <CloudUpload
@@ -117,22 +165,19 @@ export default function CorrectionUploadPage({
               aria-hidden="true"
               className="text-[#a45a1a]"
             />
-            <span className="mt-3 text-sm font-semibold text-[#283041]">
-              Drag and drop your file here
+            <span className="mt-2 text-sm font-semibold text-[#283041]">
+              Drag and drop your corrected file here
             </span>
-            <span className="mt-1 text-xs text-[#8790a0]">or</span>
-            <span className="mt-3 rounded-full bg-[#9b5317] px-5 py-2 text-xs font-medium text-white transition-colors hover:bg-[#81430f]">
+            <span className="mt-0.5 text-xs text-[#8790a0]">or</span>
+            <span className="mt-2 rounded-full bg-[#9b5317] px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#81430f]">
               Browse Files
-            </span>
-            <span className="mt-2 text-xs text-[#8790a0]">
-              CSV or TSV files only
             </span>
           </label>
 
           {selectedFile && (
-            <div className="mt-3 flex items-center gap-3 rounded-lg border border-[#e1e6ed] bg-white px-3 py-2.5">
+            <div className="flex items-center gap-3 rounded-lg border border-[#e1e6ed] bg-white px-3.5 py-2.5">
               <FileText
-                size={17}
+                size={18}
                 aria-hidden="true"
                 className="shrink-0 text-[#a45a1a]"
               />
@@ -145,19 +190,20 @@ export default function CorrectionUploadPage({
             </div>
           )}
 
-          {message && (
-            <p role="status" className="mt-3 text-sm text-[#a45a1a]">
-              {message}
-            </p>
-          )}
-
           <button
             type="button"
-            onClick={submitMockUpload}
-            disabled={!selectedFile}
-            className="mt-4 min-h-11 w-full rounded-full bg-[#a45a1a] px-5 text-sm font-medium text-white transition-colors hover:bg-[#81430f] disabled:cursor-not-allowed disabled:opacity-55"
+            onClick={handleSubmitCorrection}
+            disabled={!selectedFile || createPrepService.isPending}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-secondary-color px-5 text-sm font-semibold text-white transition-colors hover:bg-[#7f360c] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
           >
-            Upload Corrected File
+            {createPrepService.isPending ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Submitting correction...
+              </>
+            ) : (
+              "Submit Corrected File"
+            )}
           </button>
         </section>
       </div>

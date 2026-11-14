@@ -28,12 +28,12 @@ export interface CatalogProduct extends TProducts {
 export type CatalogProductQuery = ProductListQuery;
 
 export function mapCatalogProduct(product: Product): CatalogProduct {
-  const images = (product.images ?? []).filter((image) => image.url);
+  const images = (product.images ?? [])
+    .filter((image) => image.url)
+    .slice()
+    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
   const image =
-    images.find((item) => item.isPrimary)?.url ??
-    images[0]?.url ??
-    product.category?.image ??
-    productImageFallback;
+    images[0]?.url ?? product.category?.image ?? productImageFallback;
   const price =
     product.displayPrice ??
     (product.isDeal ? product.dealPrice : null) ??

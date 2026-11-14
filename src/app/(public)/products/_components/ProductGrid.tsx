@@ -1,3 +1,5 @@
+import { PackageSearch } from "lucide-react";
+import EmptyState from "@/components/shared/empty-state/EmptyState";
 import ProductCard from "@/components/shared/cards/product/ProductCard";
 import type { TProducts } from "@/types/products";
 
@@ -8,9 +10,10 @@ export default function ProductGrid({
 }) {
   if (products.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-[#D6D3CD] px-5 py-12 text-center text-sm text-[#77766F]">
-        No products match these filters. Try changing your selections.
-      </p>
+      <EmptyState
+        icon={PackageSearch}
+        message="No products match these filters."
+      />
     );
   }
 

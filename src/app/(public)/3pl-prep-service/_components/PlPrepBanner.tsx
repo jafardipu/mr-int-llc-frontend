@@ -38,12 +38,12 @@ export default function PlPrepBanner() {
             >
               Submit a Prep Request
             </Link>
-            {/* <Link
+            <Link
               href="/3pl-prep-service/my-prep-requests"
               className="mt-5 block w-fit rounded-full bg-transparent px-6 py-3 text-xs font-medium text-secondary-color border border-secondary-color transition-colors hover:bg-[#e7e5e3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9b430f]"
             >
               My Submitted Prep Requests
-            </Link> */}
+            </Link>
           </div>
         </div>
       </div>

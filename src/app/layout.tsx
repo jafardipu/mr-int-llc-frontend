@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import TopInfo from "@/components/shared/navbar/TopInfo";
 import { WishlistProvider } from "@/components/wishlist/WishlistProvider";
 import ReduxProvider from "@/redux/ReduxProvider";
+import ReactQueryProvider from "@/providers/ReactQueryProvider";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
@@ -28,13 +29,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${plusJakartaSans.className}  h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ReduxProvider>
-          <WishlistProvider>
-            <TopInfo />
-            <div>{children}</div>
-            <Toaster position="top-center" richColors />
-          </WishlistProvider>
-        </ReduxProvider>
+        <ReactQueryProvider>
+          <ReduxProvider>
+            <WishlistProvider>
+              <TopInfo />
+              <div>{children}</div>
+              <Toaster position="top-center" richColors />
+            </WishlistProvider>
+          </ReduxProvider>
+        </ReactQueryProvider>
       </body>
     </html>
   );

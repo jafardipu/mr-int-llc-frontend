@@ -31,7 +31,7 @@ export default function FavoriteIcon({
 
   const toggle = async () => {
     if (!wishlist.isLoggedIn && wishlist.ready) {
-      router.push(`/login?callbackUrl=${encodeURIComponent(pathname || "/products")}`);
+      wishlist.openLoginModal(pathname || "/products");
       return;
     }
     if (!wishlist.ready) return;

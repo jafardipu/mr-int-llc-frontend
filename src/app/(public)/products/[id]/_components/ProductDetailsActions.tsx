@@ -1,8 +1,8 @@
 "use client";
 
-import { Heart, Minus, Plus } from "lucide-react";
+import { Heart, Minus, Plus, ShoppingCart, Check as CheckIcon } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   addToWishlistAction,
@@ -10,6 +10,9 @@ import {
 } from "@/actions/wishlist.actions";
 import { runFavoriteAction } from "@/components/wishlist/favorite-toast";
 import { useWishlist } from "@/components/wishlist/WishlistProvider";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { addToCart, selectCartItems } from "@/redux/features/cartSlice";
+import { toast } from "sonner";
 
 type ProductFavoriteButtonProps = {
   productId: string;
@@ -32,7 +35,7 @@ export function ProductFavoriteButton({
 
   const toggle = async () => {
     if (!wishlist.isLoggedIn && wishlist.ready) {
-      router.push(`/login?callbackUrl=${encodeURIComponent(pathname || `/products/${productId}`)}`);
+      wishlist.openLoginModal(pathname || `/products/${productId}`);
       return;
     }
     if (!wishlist.ready || pending) return;
@@ -103,39 +106,97 @@ export function ProductFavoriteButton({
   );
 }
 
+export type ProductPurchaseControlsProduct = {
+  id: string;
+  title: string;
+  price: number;
+  image: string;
+  imageAlt: string;
+  stockCount?: number;
+  displayMinQty?: number;
+  amazonUrl?: string | null;
+  walmartUrl?: string | null;
+  isWholesale?: boolean;
+};
+
 type ProductPurchaseControlsProps = {
   stockCount?: number;
+  product?: ProductPurchaseControlsProduct;
 };
 
 export function ProductPurchaseControls({
   stockCount,
+  product,
 }: ProductPurchaseControlsProps) {
-  const [quantity, setQuantity] = useState(1);
-  const [finish, setFinish] = useState("White");
-  const [showCartNotice, setShowCartNotice] = useState(false);
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const cartItems = useAppSelector(selectCartItems);
+  const minQty = Math.max(1, product?.displayMinQty ?? 1);
+  const [quantity, setQuantity] = useState(minQty);
+
+  useEffect(() => {
+    setQuantity((current) => Math.max(minQty, current));
+  }, [minQty]);
+
+  const effectiveStock = product?.stockCount ?? stockCount;
+  const cartItemId = product?.id ?? "";
+  const existingCartItem = cartItems.find((item) => item.id === cartItemId);
+  const isInCart = Boolean(existingCartItem);
+  const outOfStock = effectiveStock !== undefined && effectiveStock <= 0;
+
+  const handleAddToCart = () => {
+    if (!product) {
+      toast.error("Product information not available");
+      return;
+    }
+
+    if (isInCart) {
+      toast.info(`"${product.title}" is already in your cart.`, {
+        action: {
+          label: "View Cart",
+          onClick: () => router.push("/cart"),
+        },
+      });
+      return;
+    }
+
+    dispatch(
+      addToCart({
+        id: cartItemId,
+        productId: product.id,
+        title: product.title,
+        price: product.price,
+        image: product.image,
+        imageAlt: product.imageAlt,
+        quantity,
+        selected: true,
+        stockCount: effectiveStock,
+      }),
+    );
+
+    toast.success(`Added ${quantity} × ${product.title} to cart!`, {
+      action: {
+        label: "View Cart",
+        onClick: () => router.push("/cart"),
+      },
+    });
+  };
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="flex  w-full gap-3 sm:flex-row justify-center sm:justify-start sm:items-center">
-        <label
-          className="flex min-h-12 min-w-0    items-center justify-between gap-3 rounded-lg border border-[#E9E6DF] bg-[#F7F8FA] px-3 py-2"
-          htmlFor="product-finish"
-        >
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8A8D94]">
-            Color
-          </span>
-          <select
-            className="max-w-[65%] cursor-pointer bg-transparent text-sm font-medium text-[#34332F] outline-none"
-            id="product-finish"
-            onChange={(event) => setFinish(event.target.value)}
-            value={finish}
-          >
-            <option>White</option>
-            <option>Black</option>
-            <option>Silver</option>
-          </select>
-        </label>
+      {isInCart && (
+        <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+          <CheckIcon aria-hidden="true" className="size-4" />
+          Already in your cart
+          {existingCartItem && (
+            <span className="text-emerald-500">
+              — Qty: {existingCartItem.quantity}
+            </span>
+          )}
+        </div>
+      )}
 
+      <div className="flex w-full gap-3 sm:flex-row sm:items-center sm:justify-start">
         <div
           aria-label="Quantity"
           className="flex h-12 items-center justify-between rounded-lg border border-[#D8DDE5] bg-white sm:w-40"
@@ -143,8 +204,10 @@ export function ProductPurchaseControls({
           <button
             aria-label="Decrease quantity"
             className="grid h-full w-11 place-items-center text-[#475569] transition hover:text-secondary-color disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={quantity <= 1}
-            onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+            disabled={quantity <= minQty}
+            onClick={() =>
+              setQuantity((current) => Math.max(minQty, current - 1))
+            }
             type="button"
           >
             <Minus aria-hidden="true" className="size-4" />
@@ -158,12 +221,14 @@ export function ProductPurchaseControls({
           <button
             aria-label="Increase quantity"
             className="grid h-full w-11 place-items-center text-[#475569] transition hover:text-secondary-color disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={stockCount !== undefined && quantity >= stockCount}
+            disabled={
+              effectiveStock !== undefined && quantity >= effectiveStock
+            }
             onClick={() =>
               setQuantity((current) =>
-                stockCount === undefined
+                effectiveStock === undefined
                   ? current + 1
-                  : Math.min(stockCount, current + 1),
+                  : Math.min(effectiveStock, current + 1),
               )
             }
             type="button"
@@ -171,46 +236,79 @@ export function ProductPurchaseControls({
             <Plus aria-hidden="true" className="size-4" />
           </button>
         </div>
+        {minQty > 1 && (
+          <p className="text-xs text-[#6B7280]">
+            Minimum order quantity: {minQty}
+            {product?.isWholesale ? " (wholesale)" : ""}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2 xl:w-[80%]">
         <button
           aria-live="polite"
-          aria-label={`Add ${quantity} ${finish} item${quantity === 1 ? "" : "s"} to cart`}
-          className="min-h-12 w-full rounded-full bg-secondary-color px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#7d391b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48 cursor-pointer"
-          disabled={stockCount === 0}
-          onClick={() => setShowCartNotice(true)}
+          aria-label={
+            isInCart
+              ? `${product?.title} is already in your cart`
+              : `Add ${quantity} item${quantity === 1 ? "" : "s"} to cart`
+          }
+          className={`min-h-12 w-full rounded-full px-6 py-3 text-sm font-semibold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+            isInCart
+              ? "bg-emerald-600 hover:bg-emerald-700"
+              : "bg-secondary-color hover:bg-[#7d391b]"
+          }`}
+          disabled={outOfStock}
+          onClick={handleAddToCart}
           type="button"
         >
-          Add to Cart
-        </button>
-        <Link
-          className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#E4E7EC] px-4 text-center text-sm font-medium text-[#5D6470] transition hover:border-secondary-color hover:text-secondary-color"
-          href="/sign-up"
-        >
-          Sign in for Wholesale Access
-        </Link>
-
-        <button
-          aria-live="polite"
-          aria-label={`Add ${quantity} ${finish} item${quantity === 1 ? "" : "s"} to cart`}
-          className="min-h-12 w-full rounded-full bg-[#000000] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#240d03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48 cursor-pointer"
-          disabled={stockCount === 0}
-          onClick={() => setShowCartNotice(true)}
-          type="button"
-        >
-          Amazon Product Link
+          <span className="inline-flex items-center justify-center gap-2">
+            {isInCart ? (
+              <>
+                <CheckIcon aria-hidden="true" className="size-4" />
+                Already in Cart
+              </>
+            ) : (
+              <>
+                <ShoppingCart aria-hidden="true" className="size-4" />
+                Add to Cart
+              </>
+            )}
+          </span>
         </button>
 
-        <Link
-          className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#E4E7EC] px-4 text-center text-sm font-medium text-[#5D6470] transition hover:border-secondary-color hover:text-secondary-color"
-          href="/contact-us"
-        >
-          Walmart Product Link
-        </Link>
+        {product?.isWholesale ? (
+          <p className="inline-flex min-h-11 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-center text-sm font-medium text-emerald-700">
+            Wholesale pricing applied
+          </p>
+        ) : (
+         
+          ""
+        )}
+
+        {product?.amazonUrl && (
+          <a
+            aria-label="Amazon Product"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#000000] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#240d03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48"
+            href={product.amazonUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            Amazon Product
+          </a>
+        )}
+
+        {product?.walmartUrl && (
+          <a
+            aria-label="Walmart Product"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#E4E7EC] px-4 text-center text-sm font-medium text-[#5D6470] transition hover:border-secondary-color hover:text-secondary-color"
+            href={product.walmartUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            Walmart Product
+          </a>
+        )}
       </div>
-
-      <div className="grid gap-2 sm:grid-cols-2"></div>
     </div>
   );
 }

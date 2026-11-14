@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { Search, Store } from "lucide-react";
+import EmptyState from "@/components/shared/empty-state/EmptyState";
 import PaginationSection from "@/components/shared/pagination/PaginationSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiRequestError } from "@/services/api-service";
@@ -56,13 +58,23 @@ export default async function BrandDirectory({
 
     return (
       <>
-        <Suspense fallback={<div className="mt-8 h-10" />}>
+        <Suspense
+          fallback={
+            <div className="mt-8 flex items-center justify-between gap-3">
+              <Skeleton className="h-6 w-28" />
+              <Skeleton className="h-10 w-64" />
+            </div>
+          }
+        >
           <BrandSearch resultCount={result.meta.total} />
         </Suspense>
         {result.data.length === 0 ? (
-          <p className="mt-6 rounded-xl border border-dashed border-[#D6D3CD] px-5 py-12 text-center text-sm text-[#77766F]">
-            {searchTerm ? "No brands match your search." : "No brands yet."}
-          </p>
+          <EmptyState
+            icon={searchTerm ? Search : Store}
+            message={
+              searchTerm ? "No brands match your search." : "No brands yet."
+            }
+          />
         ) : (
           <ul
             aria-label="Our brands"
