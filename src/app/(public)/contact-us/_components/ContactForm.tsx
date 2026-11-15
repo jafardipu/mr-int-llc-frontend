@@ -1,112 +1,128 @@
 "use client";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { contactFormSchema, type ContactFormData } from "./schemas";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { submitContactAction } from "@/actions/contact.actions";
+import { Button } from "@/components/ui/button";
+import { contactFormSchema, type ContactFormData } from "./schemas";
 
-export default function ContactForm() {
+type ContactFormProps = {
+  initialValues?: Partial<Pick<ContactFormData, "name" | "email">>;
+};
 
+export default function ContactForm({ initialValues }: ContactFormProps) {
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactFormSchema),
     defaultValues: {
-      name: "",
-      email: "",
+      name: initialValues?.name ?? "",
+      email: initialValues?.email ?? "",
       subject: "",
       message: "",
     },
   });
 
   async function onSubmit(data: ContactFormData) {
-    try {
-      console.log(data)
-      toast.success(
-        "Message received successfully! We will get back to you soon.",
-      );
-      form.reset();
-    } catch (error) {
-      console.error(error);
+    const result = await submitContactAction({
+      name: data.name,
+      email: data.email,
+      subject: data.subject?.trim() || undefined,
+      message: data.message,
+    });
+
+    if (result.status === "error") {
+      toast.error(result.message);
+      return;
     }
+
+    toast.success(
+      "Message received successfully! We will get back to you soon",
+    );
+    form.reset({
+      name: initialValues?.name ?? "",
+      email: initialValues?.email ?? "",
+      subject: "",
+      message: "",
+    });
   }
+
   return (
     <form
       onSubmit={form.handleSubmit(onSubmit)}
-      className="lg:space-y-5 space-y-4 "
+      className="space-y-4 lg:space-y-5"
+      noValidate
     >
-      {/* Name and Email Grid */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* Name Field */}
+      <div className="grid gap-4 lg:grid-cols-2">
         <div>
           <label
             htmlFor="name"
-            className="block text-primary-gray text-sm font-semibold mb-2"
+            className="mb-2 block text-sm font-semibold text-primary-gray"
           >
             Your name
           </label>
           <input
             id="name"
             type="text"
-            placeholder="Enter  your  name"
+            placeholder="Enter your name"
+            autoComplete="name"
             {...form.register("name")}
-            className="w-full px-4 py-2.5 bg-[#F7F9FB] border border-[#051a0e0a] rounded-md placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
+            className="w-full rounded-md border border-[#051a0e0a] bg-[#F7F9FB] px-4 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
           />
           {form.formState.errors.name && (
-            <p className="text-red-600 text-sm font-semibold mt-1">
+            <p className="mt-1 text-sm font-semibold text-red-600">
               {form.formState.errors.name.message}
             </p>
           )}
         </div>
 
-        {/* Email Field */}
         <div>
           <label
             htmlFor="email"
-            className="block text-primary-gray text-sm font-semibold mb-2"
+            className="mb-2 block text-sm font-semibold text-primary-gray"
           >
             Email address
           </label>
           <input
             id="email"
             type="email"
-            placeholder="Enter  your  email"
+            placeholder="Enter your email"
+            autoComplete="email"
             {...form.register("email")}
-            className="w-full px-4 py-2.5 bg-[#F7F9FB] border border-[#051a0e0a] rounded-md placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
+            className="w-full rounded-md border border-[#051a0e0a] bg-[#F7F9FB] px-4 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
           />
           {form.formState.errors.email && (
-            <p className="text-red-600 text-sm font-semibold mt-1">
+            <p className="mt-1 text-sm font-semibold text-red-600">
               {form.formState.errors.email.message}
             </p>
           )}
         </div>
       </div>
 
-      {/* Subject Field */}
       <div>
         <label
           htmlFor="subject"
-          className="block text-primary-gray text-sm font-semibold mb-2"
+          className="mb-2 block text-sm font-semibold text-primary-gray"
         >
-          Subject
+          Subject <span className="font-normal text-[#9ca3af]">(optional)</span>
         </label>
         <input
           id="subject"
           type="text"
-          placeholder="Enter  your  subject"
+          placeholder="Enter your subject"
           {...form.register("subject")}
-          className="w-full px-4 py-2.5 bg-[#F7F9FB] border border-[#051a0e0a] rounded-md placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
+          className="w-full rounded-md border border-[#051a0e0a] bg-[#F7F9FB] px-4 py-2.5 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
         />
         {form.formState.errors.subject && (
-          <p className="text-red-600 text-sm font-semibold mt-1">
+          <p className="mt-1 text-sm font-semibold text-red-600">
             {form.formState.errors.subject.message}
           </p>
         )}
       </div>
 
-      {/* Message Field */}
       <div>
         <label
           htmlFor="message"
-          className="block text-primary-gray text-sm font-semibold mb-2"
+          className="mb-2 block text-sm font-semibold text-primary-gray"
         >
           Message
         </label>
@@ -115,20 +131,19 @@ export default function ContactForm() {
           placeholder="How can we help you?"
           rows={4}
           {...form.register("message")}
-          className="w-full px-4 py-2 bg-[#F7F9FB] border border-[#051a0e0a] rounded-md placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
+          className="w-full rounded-md border border-[#051a0e0a] bg-[#F7F9FB] px-4 py-2 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-color"
         />
         {form.formState.errors.message && (
-          <p className="text-red-600 text-sm font-semibold mt-1">
+          <p className="mt-1 text-sm font-semibold text-red-600">
             {form.formState.errors.message.message}
           </p>
         )}
       </div>
 
-      {/* Submit Button */}
       <Button
         type="submit"
         disabled={form.formState.isSubmitting}
-        className="w-full bg-secondary-color hover:bg-secondary-color/90 text-white py-6 rounded-full font-bold cursor-pointer "
+        className="w-full cursor-pointer rounded-full bg-secondary-color py-6 font-bold text-white hover:bg-secondary-color/90"
       >
         {form.formState.isSubmitting ? "Sending..." : "Send message"}
       </Button>

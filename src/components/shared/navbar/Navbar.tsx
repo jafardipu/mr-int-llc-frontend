@@ -69,7 +69,13 @@ async function MobileAccount() {
   return (
     <>
       {user && <ProfileLink user={user} className="size-10 text-xs" />}
-      <MobileNav user={user} />
+      <Suspense
+        fallback={
+          <Skeleton aria-label="Loading menu" className="size-10 rounded-md" />
+        }
+      >
+        <MobileNav user={user} />
+      </Suspense>
     </>
   );
 }
@@ -119,7 +125,10 @@ export default function Navbar() {
                   aria-label="Loading account"
                   className="size-10 rounded-full"
                 />
-                <MobileNav />
+                <Skeleton
+                  aria-label="Loading menu"
+                  className="size-10 rounded-md"
+                />
               </>
             }
           >

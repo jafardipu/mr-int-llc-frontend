@@ -15,6 +15,8 @@ import {
   syncCheckoutCartAction,
   validatePromoCodeAction,
 } from "@/actions/checkout.actions";
+import { createPaymentAction } from "@/actions/payments.actions";
+import { savePendingPayment } from "@/lib/payment-session";
 import type { PromoValidation } from "@/actions/promo-codes.service";
 import type { Address } from "@/services/address.service";
 import type { Cart } from "@/services/cart.service";
@@ -262,8 +264,6 @@ export default function CheckoutFlow({
         promoCode: promo?.code,
       });
 
-      console.log(result);
-
       if (result.status === "error") {
         if (result.statusCode === 401) {
           router.push(
@@ -278,7 +278,30 @@ export default function CheckoutFlow({
 
       dispatch(clearCart());
       toast.success(result.message);
-      router.push(`/user/orders/${result.data.id}`);
+
+      const payment = await createPaymentAction({
+        orderId: result.data.id,
+        paymentMethod: "card",
+      });
+
+      if (payment.status === "error") {
+        toast.error(
+          payment.message ||
+            "Order placed, but payment could not be started.",
+        );
+        router.push(`/user/orders/${result.data.id}`);
+        return;
+      }
+
+      savePendingPayment({
+        orderId: result.data.id,
+        orderNumber: result.data.orderNumber,
+        amount: payment.data.payment.amount || result.data.total,
+        clientSecret: payment.data.clientSecret,
+        paymentIntentId: payment.data.paymentIntentId,
+      });
+
+      router.push(`/user/orders/${result.data.id}/pay`);
     });
   };
 

@@ -1,279 +1,308 @@
-"use client";
-
-import { useMemo, useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
+import { Package, Search } from "lucide-react";
+import EmptyState from "@/components/shared/empty-state/EmptyState";
+import PaginationSection from "@/components/shared/pagination/PaginationSection";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ApiRequestError } from "@/services/api-service";
+import {
+  getMyOrders,
+  orderItemCount,
+  orderNeedsPayment,
+  orderPrimaryImage,
+  type OrderStatus,
+} from "@/services/orders.service";
+import OrderStatusBadge from "./OrderStatusBadge";
+import OrdersFilters from "./OrdersFilters";
+import OrderThumbnail from "./OrderThumbnail";
 
-const orders = [
-  {
-    number: "WO-1042",
-    date: "Oct 18, 2026",
-    dateKey: "2026-10",
-    itemCount: 12,
-    total: 1248,
-    status: "Processing",
-  },
-  {
-    number: "WO-1041",
-    date: "Oct 15, 2026",
-    dateKey: "2026-10",
-    itemCount: 8,
-    total: 856.5,
-    status: "Shipped",
-  },
-  {
-    number: "WO-1040",
-    date: "Oct 10, 2026",
-    dateKey: "2026-10",
-    itemCount: 25,
-    total: 2340.75,
-    status: "Delivered",
-  },
-  {
-    number: "WO-1039",
-    date: "Oct 05, 2026",
-    dateKey: "2026-10",
-    itemCount: 6,
-    total: 620,
-    status: "Pending",
-  },
-  {
-    number: "WO-1040",
-    date: "Oct 10, 2026",
-    dateKey: "2026-10",
-    itemCount: 25,
-    total: 2340.75,
-    status: "Delivered",
-  },
-] as const;
-
-const statuses = [
-  "All Orders",
-  "Pending",
-  "Processing",
-  "Shipped",
-  "Delivered",
-] as const;
-type OrderStatus = (typeof statuses)[number];
-
-const statusStyles: Record<Exclude<OrderStatus, "All Orders">, string> = {
-  Pending: "bg-[#f1f5f9] text-[#64748b]",
-  Processing: "bg-[#fff4e5] text-[#e58200]",
-  Shipped: "bg-[#e0f2ff] text-[#0284c7]",
-  Delivered: "bg-[#e5f7ed] text-[#16a34a]",
-};
+const pageSize = 10;
+const statuses = new Set<OrderStatus>([
+  "pending",
+  "processing",
+  "completed",
+  "cancelled",
+]);
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
 
-function StatusBadge({
-  status,
-}: {
-  status: Exclude<OrderStatus, "All Orders">;
-}) {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function param(value: string | string[] | undefined) {
+  const first = Array.isArray(value) ? value[0] : value;
+  return first?.trim() || undefined;
+}
+
+function pageNumber(value: string | string[] | undefined) {
+  const parsed = Number(param(value));
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function formatDate(value: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function OrdersListSkeleton() {
   return (
-    <span
-      className={`inline-flex min-w-29 justify-center rounded-full px-4 py-2 text-sm font-medium ${statusStyles[status]}`}
-    >
-      {status}
-    </span>
+    <div aria-busy="true" aria-label="Loading orders" className="space-y-7">
+      <Skeleton className="h-11 w-full max-w-134 rounded-xl" />
+      <div className="flex gap-3">
+        {Array.from({ length: 5 }, (_, index) => (
+          <Skeleton key={index} className="h-9 w-24 rounded-full" />
+        ))}
+      </div>
+      <Skeleton className="h-64 w-full rounded-2xl" />
+    </div>
   );
 }
 
-export default function OrdersList() {
-  const [activeStatus, setActiveStatus] = useState<OrderStatus>("All Orders");
-  const [search, setSearch] = useState("");
-  const [dateRange, setDateRange] = useState("all");
+export default async function OrdersList({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = (await searchParams) ?? {};
+  const page = pageNumber(params.page);
+  const searchTerm = param(params.searchTerm);
+  const statusParam = param(params.status);
+  const status =
+    statusParam && statuses.has(statusParam as OrderStatus)
+      ? (statusParam as OrderStatus)
+      : undefined;
 
-
-  const filteredOrders = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return orders.filter((order) => {
-      const matchesStatus =
-        activeStatus === "All Orders" || order.status === activeStatus;
-      const matchesDate = dateRange === "all" || order.dateKey === dateRange;
-      const searchableText =
-        `${order.number} ${order.date} ${order.itemCount} ${order.status} ${currency.format(order.total)}`.toLowerCase();
-
-      return matchesStatus && matchesDate && searchableText.includes(query);
+  try {
+    const result = await getMyOrders({
+      page,
+      limit: pageSize,
+      sort: "-createdAt",
+      searchTerm,
+      status,
     });
-  }, [activeStatus, dateRange, search]);
 
-
-  return (
-    <section className="space-y-7" aria-label="Orders">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <label className="relative block w-full sm:max-w-134">
-          <Search
-            size={17}
-            aria-hidden="true"
-            className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[#9ca3af]"
-          />
-          <span className="sr-only">Search orders</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by order number, product or date..."
-            className="h-11 w-full rounded-xl border border-[#e1e5eb] bg-white pl-12 pr-4 text-sm text-[#374151] shadow-[0_1px_3px_rgba(27,39,58,0.08)] outline-none placeholder:text-[#9ca3af] focus:border-[#995618] focus:ring-2 focus:ring-[#995618]/15 sm:text-base"
-          />
-        </label>
-
-        {/* <label className="relative block w-full sm:w-41.5">
-          <span className="sr-only">Filter by date</span>
-          <select
-            value={dateRange}
-            onChange={(event) => setDateRange(event.target.value)}
-            className="h-11 w-full appearance-none rounded-xl border border-[#e1e5eb] bg-white px-5 pr-11 text-base text-[#4b5563] shadow-[0_1px_3px_rgba(27,39,58,0.08)] outline-none focus:border-[#995618] focus:ring-2 focus:ring-[#995618]/15"
-          >
-            <option value="all">Date Range</option>
-            <option value="2026-10">October 2026</option>
-            <option value="2026-09">September 2026</option>
-            <option value="2026-08">August 2026</option>
-          </select>
-          <ChevronDown
-            size={16}
-            aria-hidden="true"
-            className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#9ca3af]"
-          />
-        </label> */}
-      </div>
-
-      <div
-        className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1"
-        role="tablist"
-        aria-label="Filter orders by status"
-      >
-        {statuses.map((status) => {
-          const isActive = activeStatus === status;
-
-          return (
-            <button
-              key={status}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveStatus(status)}
-              className={`shrink-0 rounded-full border px-5 py-1.5 text-sm font-medium shadow-[0_1px_3px_rgba(27,39,58,0.08)] transition-colors sm:px-5.5 sm:text-base ${
-                isActive
-                  ? "border-[#995618] bg-[#995618] text-white"
-                  : "border-[#e1e5eb] bg-white text-[#4b5563] hover:border-[#c7cdd5]"
-              }`}
-            >
-              {status}
-            </button>
-          );
-        })}
-      </div>
-
-      {filteredOrders.length > 0 ? (
-        <>
-          <div className="hidden overflow-hidden rounded-2xl border border-[#e3e7ec] bg-white shadow-[0_1px_3px_rgba(27,39,58,0.06)] md:block">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-190 border-collapse text-left">
-                <thead className="bg-[#fafafa] text-sm font-semibold text-[#737b89]">
-                  <tr>
-                    <th scope="col" className="px-7 py-6">
-                      Order No.
-                    </th>
-                    <th scope="col" className="px-5 py-6">
-                      Date
-                    </th>
-                    <th scope="col" className="px-5 py-6">
-                      Items
-                    </th>
-                    <th scope="col" className="px-5 py-6">
-                      Total Amount
-                    </th>
-                    <th scope="col" className="px-5 py-6">
-                      Status
-                    </th>
-                    <th scope="col" className="px-5 py-6 text-center">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map((order, index) => (
-                    <tr
-                      key={`${order.number}-${order.dateKey}-${index}`}
-                      className="border-t border-[#edf0f3] text-base"
-                    >
-                      <td className="whitespace-nowrap px-7 py-6 font-semibold text-[#1f2937]">
-                        {order.number}
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-6 text-[#737b89]">
-                        {order.date}
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-6 text-[#596273]">
-                        {order.itemCount} items
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-6 font-semibold text-[#374151]">
-                        {currency.format(order.total)}
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-6">
-                        <StatusBadge status={order.status} />
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-5 text-center">
-                        <Link href={`/user/orders/${order.number}`}
-                          type="button"
-                          className="rounded-xl border border-[#e1e5eb] px-5 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#995618]"
-                        >
-                          View Details
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+    return (
+      <section className="space-y-7" aria-label="Orders">
+        <Suspense
+          fallback={
+            <div className="space-y-7">
+              <Skeleton className="h-11 w-full max-w-134 rounded-xl" />
+              <div className="flex gap-3">
+                {Array.from({ length: 5 }, (_, index) => (
+                  <Skeleton key={index} className="h-9 w-24 rounded-full" />
+                ))}
+              </div>
             </div>
-          </div>
+          }
+        >
+          <OrdersFilters />
+        </Suspense>
 
-          <ul className="space-y-3 md:hidden">
-            {filteredOrders.map((order, index) => (
-              <li
-                key={`${order.number}-${order.dateKey}-${index}`}
-                className="rounded-2xl border border-[#e3e7ec] bg-white p-4 shadow-[0_1px_3px_rgba(27,39,58,0.06)]"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-[#1f2937]">
-                      {order.number}
-                    </p>
-                    <p className="mt-1 text-sm text-[#737b89]">{order.date}</p>
-                  </div>
-                  <StatusBadge status={order.status} />
-                </div>
-                <div className="mt-4 flex items-center justify-between border-t border-[#edf0f3] pt-4">
-                  <div>
-                    <p className="text-sm text-[#737b89]">
-                      {order.itemCount} items
-                    </p>
-                    <p className="mt-1 font-semibold text-[#374151]">
-                      {currency.format(order.total)}
-                    </p>
-                  </div>
-                  <Link href={`/user/orders/${order.number}`} className="ml-auto">
-                    <button
-                      type="button"
-                      className="rounded-xl border border-[#e1e5eb] px-4 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#995618]"
-                    >
-                      View Details
-                    </button>
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <div className="rounded-2xl border border-[#e3e7ec] bg-white px-5 py-12 text-center text-[#737b89]">
-          No orders found.
-        </div>
-      )}
-    </section>
-  );
+        {result.data.length === 0 ? (
+          <EmptyState
+            icon={searchTerm || status ? Search : Package}
+            message={
+              searchTerm || status
+                ? "No orders match these filters."
+                : "No orders yet."
+            }
+            className="min-h-64 rounded-2xl border border-[#e3e7ec] bg-white"
+          />
+        ) : (
+          <>
+            <div className="hidden overflow-hidden rounded-2xl border border-[#e3e7ec] bg-white shadow-[0_1px_3px_rgba(27,39,58,0.06)] md:block">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-190 border-collapse text-left">
+                  <thead className="bg-[#fafafa] text-sm font-semibold text-[#737b89]">
+                    <tr>
+                      <th scope="col" className="px-7 py-6">
+                        Order No.
+                      </th>
+                      <th scope="col" className="px-5 py-6">
+                        Date
+                      </th>
+                      <th scope="col" className="px-5 py-6">
+                        Items
+                      </th>
+                      <th scope="col" className="px-5 py-6">
+                        Total Amount
+                      </th>
+                      <th scope="col" className="px-5 py-6">
+                        Status
+                      </th>
+                      <th scope="col" className="px-5 py-6 text-center">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.data.map((order) => {
+                      const count = orderItemCount(order);
+                      const image = orderPrimaryImage(order);
+                      const unpaid = orderNeedsPayment(order);
+                      return (
+                        <tr
+                          key={order.id}
+                          className="border-t border-[#edf0f3] text-base"
+                        >
+                          <td className="whitespace-nowrap px-7 py-6">
+                            <span className="flex items-center gap-3">
+                              <OrderThumbnail
+                                image={image}
+                                alt={order.items[0]?.name ?? order.orderNumber}
+                              />
+                              <span className="font-semibold text-[#1f2937]">
+                                {order.orderNumber}
+                              </span>
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-6 text-[#737b89]">
+                            {formatDate(order.createdAt)}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-6 text-[#596273]">
+                            {count} {count === 1 ? "item" : "items"}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-6 font-semibold text-[#374151]">
+                            {currency.format(order.total)}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-6">
+                            <div className="flex flex-col items-start gap-2">
+                              <OrderStatusBadge status={order.status} />
+                              {order.payment?.status === "paid" ? (
+                                <span className="rounded-full bg-[#e5f7ed] px-2.5 py-0.5 text-xs font-semibold text-[#16a34a]">
+                                  Paid
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-[#fff4e5] px-2.5 py-0.5 text-xs font-semibold text-[#e58200]">
+                                  Unpaid
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-5">
+                            <div className="flex flex-wrap items-center justify-center gap-2">
+                              <Link
+                                href={`/user/orders/${order.id}`}
+                                className="rounded-xl border border-[#e1e5eb] px-4 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#995618]"
+                              >
+                                View
+                              </Link>
+                              {unpaid && (
+                                <Link
+                                  href={`/user/orders/${order.id}/pay`}
+                                  className="rounded-xl bg-[#995618] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#7a4513] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#995618]"
+                                >
+                                  Pay Now
+                                </Link>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <ul className="space-y-3 md:hidden">
+              {result.data.map((order) => {
+                const count = orderItemCount(order);
+                const image = orderPrimaryImage(order);
+                const unpaid = orderNeedsPayment(order);
+                return (
+                  <li
+                    key={order.id}
+                    className="rounded-2xl border border-[#e3e7ec] bg-white p-4 shadow-[0_1px_3px_rgba(27,39,58,0.06)]"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <OrderThumbnail
+                          image={image}
+                          alt={order.items[0]?.name ?? order.orderNumber}
+                        />
+                        <div>
+                          <p className="font-semibold text-[#1f2937]">
+                            {order.orderNumber}
+                          </p>
+                          <p className="mt-1 text-sm text-[#737b89]">
+                            {formatDate(order.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <OrderStatusBadge status={order.status} />
+                        {order.payment?.status === "paid" ? (
+                          <span className="rounded-full bg-[#e5f7ed] px-2.5 py-0.5 text-xs font-semibold text-[#16a34a]">
+                            Paid
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-[#fff4e5] px-2.5 py-0.5 text-xs font-semibold text-[#e58200]">
+                            Unpaid
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#edf0f3] pt-4">
+                      <div>
+                        <p className="text-sm text-[#737b89]">
+                          {count} {count === 1 ? "item" : "items"}
+                        </p>
+                        <p className="mt-1 font-semibold text-[#374151]">
+                          {currency.format(order.total)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Link
+                          href={`/user/orders/${order.id}`}
+                          className="rounded-xl border border-[#e1e5eb] px-4 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb]"
+                        >
+                          View
+                        </Link>
+                        {unpaid && (
+                          <Link
+                            href={`/user/orders/${order.id}/pay`}
+                            className="rounded-xl bg-[#995618] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#7a4513]"
+                          >
+                            Pay Now
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {result.meta.total > result.meta.limit && (
+              <PaginationSection
+                total={result.meta.total}
+                current={result.meta.page}
+                pageSize={result.meta.limit}
+              />
+            )}
+          </>
+        )}
+      </section>
+    );
+  } catch (error) {
+    const message =
+      error instanceof ApiRequestError
+        ? error.message
+        : "Unable to load orders.";
+
+    return (
+      <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+        {message}
+      </p>
+    );
+  }
 }

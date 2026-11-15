@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
-import { changePasswordAction } from "@/actions/auth.actions";
+import {
+  changePasswordAction,
+  logoutAction,
+} from "@/actions/auth.actions";
+import { useAppDispatch } from "@/redux/hooks";
+import { logout } from "@/redux/features/authSlice";
 import PasswordFormField, {
   type ChangePasswordFormValues,
   type PasswordFieldName,
@@ -31,6 +37,8 @@ const passwordFields: {
 ];
 
 export default function ChangePasswordForm() {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
   const form = useForm<ChangePasswordFormValues>({
@@ -57,7 +65,11 @@ export default function ChangePasswordForm() {
     }
 
     form.reset();
-    setSubmitMessage(result.message);
+    setSubmitMessage(result.message || "Password updated. Signing you out…");
+    await logoutAction();
+    dispatch(logout());
+    router.push("/login");
+    router.refresh();
   };
 
   return (

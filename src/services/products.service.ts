@@ -293,6 +293,55 @@ export async function getProducts(
   return parseApiPage(result, "products", isProduct);
 }
 
+export type FeaturedProductsSource = "featured" | "fallback";
+
+export interface FeaturedProductsResult extends ApiPage<Product> {
+  source: FeaturedProductsSource;
+}
+
+export async function getFeaturedProducts(
+  query: { limit?: number } = {},
+): Promise<FeaturedProductsResult> {
+  const limit = Math.min(Math.max(query.limit ?? 8, 1), 24);
+  const result: unknown = await apiGet("products/featured", {
+    searchParams: { limit },
+    tags: [productsTag],
+    ...(await authRequest()),
+  });
+
+  if (
+    !isRecord(result) ||
+    result.success !== true ||
+    !isRecord(result.data) ||
+    !Array.isArray(result.data.data) ||
+    !isRecord(result.data.meta)
+  ) {
+    throw new Error("API returned an invalid response: /products/featured");
+  }
+
+  const page = parseApiPage(
+    {
+      success: true,
+      message: typeof result.message === "string" ? result.message : "",
+      data: {
+        data: result.data.data,
+        meta: result.data.meta,
+      },
+    },
+    "products/featured",
+    isProduct,
+  );
+
+  const source: FeaturedProductsSource =
+    result.data.source === "featured" ? "featured" : "fallback";
+
+  return {
+    ...page,
+    data: page.data.filter((product) => !product.isDeleted),
+    source,
+  };
+}
+
 export async function getProductById(
   id: string,
 ): Promise<ProductDetail | null> {

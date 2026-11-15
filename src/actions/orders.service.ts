@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { AuthApiError, authRequest } from "@/actions/auth-request";
 import { accessTokenCookie } from "@/lib/auth-cookies";
-import { isRecord } from "@/services/api-response";
+import { readOrder, type Order } from "@/services/orders.service";
 
 export type PlaceOrderInput = {
   addressId: string;
@@ -14,34 +14,18 @@ export type PlaceOrderInput = {
   discount?: number;
 };
 
-export interface PlacedOrder {
-  id: string;
-  orderNumber: string;
-  status: string;
-  subtotal: number;
-  shippingFee: number;
-  tax: number;
-  discount: number;
-  total: number;
-  promoCode: string | null;
-}
-
-function readOrder(value: unknown): PlacedOrder | null {
-  if (!isRecord(value) || typeof value.id !== "string") return null;
-
-  return {
-    id: value.id,
-    orderNumber:
-      typeof value.orderNumber === "string" ? value.orderNumber : value.id,
-    status: typeof value.status === "string" ? value.status : "pending",
-    subtotal: typeof value.subtotal === "number" ? value.subtotal : 0,
-    shippingFee: typeof value.shippingFee === "number" ? value.shippingFee : 0,
-    tax: typeof value.tax === "number" ? value.tax : 0,
-    discount: typeof value.discount === "number" ? value.discount : 0,
-    total: typeof value.total === "number" ? value.total : 0,
-    promoCode: typeof value.promoCode === "string" ? value.promoCode : null,
-  };
-}
+export type PlacedOrder = Pick<
+  Order,
+  | "id"
+  | "orderNumber"
+  | "status"
+  | "subtotal"
+  | "shippingFee"
+  | "tax"
+  | "discount"
+  | "total"
+  | "promoCode"
+>;
 
 export async function placeOrder(input: PlaceOrderInput) {
   const addressId = input.addressId.trim();
@@ -76,6 +60,16 @@ export async function placeOrder(input: PlaceOrderInput) {
 
   return {
     message: result.message || "Order placed successfully",
-    order,
+    order: {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      subtotal: order.subtotal,
+      shippingFee: order.shippingFee,
+      tax: order.tax,
+      discount: order.discount,
+      total: order.total,
+      promoCode: order.promoCode,
+    } satisfies PlacedOrder,
   };
 }

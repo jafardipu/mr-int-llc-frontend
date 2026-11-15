@@ -1,29 +1,79 @@
 import { Check } from "lucide-react";
+import type { OrderStatus } from "@/services/orders.service";
 
-const timeline = [
-  { title: "Order Placed", date: "Oct 18, 2026, 10:45 AM", state: "complete" },
-  { title: "Payment Confirmed", date: "Oct 18, 2026, 11:20 AM", state: "complete" },
-  { title: "Processing", date: "Oct 18, 2026, 01:15 AM", state: "current" },
-  { title: "Shipped", date: "", state: "upcoming" },
-  { title: "Delivered", date: "", state: "upcoming" },
-] as const;
+const steps: Array<{ key: OrderStatus | "placed"; title: string }> = [
+  { key: "placed", title: "Order Placed" },
+  { key: "pending", title: "Pending" },
+  { key: "processing", title: "Processing" },
+  { key: "completed", title: "Completed" },
+];
 
-export default function OrderTimelineCard() {
+function stepState(
+  stepKey: (typeof steps)[number]["key"],
+  status: OrderStatus,
+): "complete" | "current" | "upcoming" | "cancelled" {
+  if (status === "cancelled") {
+    if (stepKey === "placed" || stepKey === "pending") return "complete";
+    return "cancelled";
+  }
+
+  const order: Array<(typeof steps)[number]["key"]> = [
+    "placed",
+    "pending",
+    "processing",
+    "completed",
+  ];
+  const currentIndex = order.indexOf(status === "pending" ? "pending" : status);
+  const stepIndex = order.indexOf(stepKey);
+
+  if (stepKey === "placed") return "complete";
+  if (stepIndex < currentIndex) return "complete";
+  if (stepIndex === currentIndex) return "current";
+  return "upcoming";
+}
+
+export default function OrderTimelineCard({
+  status,
+  createdAt,
+}: {
+  status: OrderStatus;
+  createdAt: string;
+}) {
+  const placedDate = (() => {
+    if (!createdAt) return "";
+    const date = new Date(createdAt);
+    if (Number.isNaN(date.getTime())) return createdAt;
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  })();
+
   return (
     <section className="rounded-2xl border border-[#edf0f3] bg-white p-5 shadow-[0_1px_3px_rgba(27,39,58,0.05)] sm:p-6">
       <h2 className="text-base font-semibold text-[#374151]">Order Timeline</h2>
 
+      {status === "cancelled" && (
+        <p className="mt-3 rounded-lg bg-[#fee2e2] px-3 py-2 text-sm font-medium text-[#dc2626]">
+          This order was cancelled.
+        </p>
+      )}
+
       <ol className="mt-5 space-y-0">
-        {timeline.map((step, index) => {
-          const isComplete = step.state === "complete";
-          const isCurrent = step.state === "current";
+        {steps.map((step, index) => {
+          const state = stepState(step.key, status);
+          const isComplete = state === "complete";
+          const isCurrent = state === "current";
 
           return (
             <li
-              key={step.title}
+              key={step.key}
               className="relative flex min-h-14 gap-3.5 pb-3 last:min-h-0 last:pb-0"
             >
-              {index < timeline.length - 1 && (
+              {index < steps.length - 1 && (
                 <span
                   aria-hidden="true"
                   className={`absolute left-2.75 top-6 h-[calc(100%-12px)] w-0.5 ${
@@ -58,9 +108,9 @@ export default function OrderTimelineCard() {
                 >
                   {step.title}
                 </p>
-                {step.date && (
+                {step.key === "placed" && placedDate && (
                   <p className="mt-0.5 text-xs leading-4 text-[#a3acb9]">
-                    {step.date}
+                    {placedDate}
                   </p>
                 )}
               </div>

@@ -1,4 +1,7 @@
-import Banner from "@/app/(public)/home/_components/banner/Banner";
+import { Suspense } from "react";
+import Banner, {
+  BannerSkeleton,
+} from "@/app/(public)/home/_components/banner/Banner";
 import Brands from "@/app/(public)/home/_components/brands/brands";
 import Categories from "@/app/(public)/home/_components/categories/categories";
 import AboutHeader from "./(public)/about-us/_components/AboutHeader";
@@ -10,7 +13,9 @@ import FAQ from "@/app/(public)/home/_components/Faq/FAQ";
 export default function HomePage() {
   return (
     <main className="flex-1">
-      <Banner />
+      <Suspense fallback={<BannerSkeleton />}>
+        <Banner />
+      </Suspense>
       <AboutHeader page="home" />
       <Categories />
       <Brands />
