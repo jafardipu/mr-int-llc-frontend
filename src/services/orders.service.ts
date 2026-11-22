@@ -115,8 +115,31 @@ export interface MyOrdersQuery {
   status?: OrderStatus;
 }
 
-export function orderNeedsPayment(order: Pick<Order, "payment">) {
-  return order.payment?.status !== "paid";
+export interface CheckoutSummaryItem {
+  key: string;
+  productId: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  image: string | null;
+}
+
+/** Server-priced cart. Display these numbers as-is; never recompute them. */
+export interface CheckoutSummary {
+  items: CheckoutSummaryItem[];
+  subtotal: number;
+  discount: number;
+  promoCode: string | null;
+  shippingFee: number;
+  tax: number;
+  total: number;
+}
+
+/** Only `pending` orders can be paid (or cancelled) by the customer. */
+export function orderNeedsPayment(order: Pick<Order, "status" | "payment">) {
+  return order.status === "pending" && order.payment?.status !== "paid";
 }
 
 const orderStatuses = new Set<OrderStatus>([
@@ -343,6 +366,173 @@ export async function getOrderById(id: string): Promise<Order | null> {
     }
     throw error;
   }
+}
+
+export type DashboardOrder = {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  /** An OrderStatus; any other value is kept so the UI can show it as-is. */
+  status: string;
+  /** null when the customer never started a payment. */
+  paymentStatus: PaymentStatus | null;
+  total: number;
+  /** Total quantity across all items, not the number of products. */
+  itemCount: number;
+  image: string | null;
+  firstItemName: string | null;
+};
+
+export type CustomerDashboard = {
+  stats: { totalOrders: number; activeOrders: number };
+  recentOrders: DashboardOrder[];
+};
+
+function readDashboardOrder(value: unknown): DashboardOrder | null {
+  if (!isRecord(value) || typeof value.id !== "string") return null;
+  return {
+    id: value.id,
+    orderNumber:
+      typeof value.orderNumber === "string" ? value.orderNumber : value.id,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : "",
+    status: typeof value.status === "string" ? value.status : "",
+    paymentStatus:
+      typeof value.paymentStatus === "string" ? value.paymentStatus : null,
+    total: readNumber(value.total),
+    itemCount: readNumber(value.itemCount),
+    image:
+      typeof value.image === "string" && value.image.trim() ? value.image : null,
+    firstItemName:
+      typeof value.firstItemName === "string" && value.firstItemName.trim()
+        ? value.firstItemName
+        : null,
+  };
+}
+
+function readDashboard(value: unknown): CustomerDashboard {
+  const stats = isRecord(value) && isRecord(value.stats) ? value.stats : null;
+  if (!stats) {
+    throw new ApiRequestError("The API returned an invalid dashboard.", 500);
+  }
+  const recentOrders =
+    isRecord(value) && Array.isArray(value.recentOrders)
+      ? value.recentOrders
+      : [];
+
+  return {
+    stats: {
+      totalOrders: readNumber(stats.totalOrders),
+      activeOrders: readNumber(stats.activeOrders),
+    },
+    recentOrders: recentOrders.flatMap((order) => {
+      const parsed = readDashboardOrder(order);
+      return parsed ? [parsed] : [];
+    }),
+  };
+}
+
+/**
+ * Order counts and the five newest orders for the signed-in customer. Never
+ * cached: statuses change after Stripe payments, cancellations and admin
+ * updates. Throws ApiRequestError 401 (session ended) or 403 (admin account).
+ */
+export async function getMyDashboard(): Promise<CustomerDashboard> {
+  const resource = "orders/my-dashboard";
+  const result: unknown = await apiGet(resource, {
+    tags: [ordersTag],
+    ...(await authHeaders()),
+  });
+  return readDashboard(parseApiItem(result, resource, isRecord));
+}
+
+function readSummaryItem(value: unknown, index: number): CheckoutSummaryItem | null {
+  if (!isRecord(value)) return null;
+
+  const product = isRecord(value.product) ? value.product : null;
+  const productId =
+    typeof value.productId === "string"
+      ? value.productId
+      : typeof product?.id === "string"
+        ? product.id
+        : "";
+  const quantity = readNumber(value.quantity, NaN);
+  const unitPrice = readNumber(value.unitPrice ?? value.price, NaN);
+  if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice)) return null;
+
+  const images = Array.isArray(product?.images)
+    ? product.images.flatMap((image) => {
+        const parsed = readImage(image);
+        return parsed ? [parsed] : [];
+      })
+    : [];
+
+  return {
+    key:
+      typeof value.id === "string" ? value.id : productId || `item-${index}`,
+    productId,
+    name:
+      typeof value.name === "string"
+        ? value.name
+        : typeof product?.name === "string"
+          ? product.name
+          : "Product",
+    sku:
+      typeof value.sku === "string"
+        ? value.sku
+        : typeof product?.sku === "string"
+          ? product.sku
+          : "",
+    quantity,
+    unitPrice,
+    total: readNumber(value.total ?? value.lineTotal, unitPrice * quantity),
+    image:
+      images.find((image) => image.isPrimary)?.url ?? images[0]?.url ?? null,
+  };
+}
+
+function readCheckoutSummary(value: unknown): CheckoutSummary {
+  if (!isRecord(value) || !Number.isFinite(readNumber(value.total, NaN))) {
+    throw new ApiRequestError("The API returned an invalid checkout summary.", 500);
+  }
+
+  const promoCode =
+    typeof value.promoCode === "string" && value.promoCode.trim()
+      ? value.promoCode
+      : isRecord(value.promoCode) && typeof value.promoCode.code === "string"
+        ? value.promoCode.code
+        : null;
+
+  return {
+    items: Array.isArray(value.items)
+      ? value.items.flatMap((item, index) => {
+          const parsed = readSummaryItem(item, index);
+          return parsed ? [parsed] : [];
+        })
+      : [],
+    subtotal: readNumber(value.subtotal),
+    discount: readNumber(value.discount),
+    promoCode,
+    shippingFee: readNumber(value.shippingFee),
+    tax: readNumber(value.tax),
+    total: readNumber(value.total),
+  };
+}
+
+/**
+ * Prices the current server cart exactly like checkout will. Throws an
+ * ApiRequestError (400) with a user-facing message for an invalid promo code,
+ * an empty cart, insufficient stock or a wholesale minimum quantity.
+ */
+export async function getCheckoutSummary(
+  promoCode?: string,
+): Promise<CheckoutSummary> {
+  const code = promoCode?.trim();
+  const result: unknown = await apiGet("orders/checkout-summary", {
+    searchParams: { promoCode: code || undefined },
+    ...(await authHeaders()),
+  });
+
+  return readCheckoutSummary(parseApiItem(result, "orders/checkout-summary", isRecord));
 }
 
 export function orderItemCount(order: Order) {

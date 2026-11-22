@@ -9,26 +9,50 @@ import {
 } from "@/actions/address.service";
 import { syncCartItems } from "@/actions/cart.service";
 import { placeOrder, type PlaceOrderInput } from "@/actions/orders.service";
-import { validatePromoCode } from "@/actions/promo-codes.service";
 import { getMyAddresses, type Address } from "@/services/address.service";
 import { getMyCart, type Cart } from "@/services/cart.service";
 import { ApiRequestError } from "@/services/api-service";
-import type { PromoValidation } from "@/actions/promo-codes.service";
+import {
+  getCheckoutSummary,
+  type CheckoutSummary,
+} from "@/services/orders.service";
 import type { PlacedOrder } from "@/actions/orders.service";
 
 type ActionResult<T> =
   | { status: "success"; message: string; data: T }
-  | { status: "error"; message: string; statusCode?: number };
+  | {
+      status: "error";
+      message: string;
+      statusCode?: number;
+      // Raw API error body; only sent to the browser outside production.
+      details?: unknown;
+    };
+
+const exposeDetails = process.env.NODE_ENV !== "production";
 
 function fail(error: unknown, fallback: string): ActionResult<never> {
+  const details = error instanceof AuthApiError ? error.body : undefined;
+  console.error(
+    "[checkout api error]",
+    error instanceof Error ? error.message : String(error),
+    details ?? "",
+  );
+
   if (error instanceof AuthApiError || error instanceof ApiRequestError) {
     return {
       status: "error",
       message: error.message,
       statusCode: error.status,
+      ...(exposeDetails ? { details } : {}),
     };
   }
-  return { status: "error", message: fallback };
+  return {
+    status: "error",
+    message: fallback,
+    ...(exposeDetails
+      ? { details: error instanceof Error ? error.message : String(error) }
+      : {}),
+  };
 }
 
 export async function loadCheckoutCartAction(): Promise<ActionResult<Cart>> {
@@ -112,19 +136,25 @@ export async function deleteAddressAction(
   }
 }
 
-export async function validatePromoCodeAction(input: {
-  code: string;
-  subtotal?: number;
-}): Promise<ActionResult<PromoValidation>> {
+/**
+ * Server-priced summary of the current cart. Pass a promo code to apply it;
+ * a 400 error carries a user-facing reason (invalid/expired code, minimum
+ * order not met, empty cart, stock, wholesale minimums).
+ */
+export async function loadCheckoutSummaryAction(
+  promoCode?: string,
+): Promise<ActionResult<CheckoutSummary>> {
   try {
-    const result = await validatePromoCode(input);
+    const summary = await getCheckoutSummary(promoCode);
     return {
       status: "success",
-      message: result.message,
-      data: result.promo,
+      message: summary.promoCode
+        ? `Promo code ${summary.promoCode} applied`
+        : "Checkout summary loaded",
+      data: summary,
     };
   } catch (error) {
-    return fail(error, "Unable to validate promo code.");
+    return fail(error, "Unable to load the checkout summary.");
   }
 }
 

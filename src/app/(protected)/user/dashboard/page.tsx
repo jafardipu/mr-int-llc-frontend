@@ -1,9 +1,10 @@
 import { Suspense } from "react";
-import DashboardStats from "./_components/DashboardStats";
+import DashboardOrders, {
+  DashboardOrdersSkeleton,
+} from "./_components/DashboardOrders";
 import DashboardWelcome, {
   DashboardWelcomeSkeleton,
 } from "./_components/DashboardWelcome";
-import RecentOrders from "./_components/RecentOrders";
 
 export default function DashboardPage() {
   return (
@@ -11,8 +12,9 @@ export default function DashboardPage() {
       <Suspense fallback={<DashboardWelcomeSkeleton />}>
         <DashboardWelcome />
       </Suspense>
-      <DashboardStats />
-      <RecentOrders />
+      <Suspense fallback={<DashboardOrdersSkeleton />}>
+        <DashboardOrders />
+      </Suspense>
     </div>
   );
 }

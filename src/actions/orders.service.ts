@@ -5,13 +5,14 @@ import { AuthApiError, authRequest } from "@/actions/auth-request";
 import { accessTokenCookie } from "@/lib/auth-cookies";
 import { readOrder, type Order } from "@/services/orders.service";
 
+/**
+ * Prices are calculated on the server; any price fields sent here would be
+ * ignored, so only the address, notes and an applied promo code are sent.
+ */
 export type PlaceOrderInput = {
   addressId: string;
   notes?: string;
-  shippingFee?: number;
-  tax?: number;
   promoCode?: string;
-  discount?: number;
 };
 
 export type PlacedOrder = Pick<
@@ -27,22 +28,21 @@ export type PlacedOrder = Pick<
   | "promoCode"
 >;
 
+async function accessToken() {
+  const token = (await cookies()).get(accessTokenCookie)?.value;
+  if (!token) throw new AuthApiError("Please sign in again.", 401);
+  return token;
+}
+
 export async function placeOrder(input: PlaceOrderInput) {
   const addressId = input.addressId.trim();
   if (!addressId) throw new AuthApiError("Address is required", 400);
 
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) throw new AuthApiError("Please sign in again.", 401);
+  const token = await accessToken();
 
-  const body: Record<string, string | number> = { addressId };
+  const body: Record<string, string> = { addressId };
   if (input.notes?.trim()) body.notes = input.notes.trim();
-  if (typeof input.shippingFee === "number") body.shippingFee = input.shippingFee;
-  if (typeof input.tax === "number") body.tax = input.tax;
-  if (input.promoCode?.trim()) {
-    body.promoCode = input.promoCode.trim();
-  } else if (typeof input.discount === "number") {
-    body.discount = input.discount;
-  }
+  if (input.promoCode?.trim()) body.promoCode = input.promoCode.trim();
 
   const result = await authRequest<unknown>("/orders/checkout", {
     method: "POST",
@@ -55,7 +55,7 @@ export async function placeOrder(input: PlaceOrderInput) {
 
   const order = readOrder(result.data);
   if (!order) {
-    throw new AuthApiError("Order response was invalid.", 500);
+    throw new AuthApiError("Order response was invalid.", 500, result.data);
   }
 
   return {
@@ -71,5 +71,25 @@ export async function placeOrder(input: PlaceOrderInput) {
       total: order.total,
       promoCode: order.promoCode,
     } satisfies PlacedOrder,
+  };
+}
+
+/** Cancels a `pending` (unpaid) order. Paid orders return 400. */
+export async function cancelOrder(orderId: string) {
+  const id = orderId.trim();
+  if (!id) throw new AuthApiError("Order is required", 400);
+
+  const token = await accessToken();
+  const result = await authRequest<unknown>(
+    `/orders/${encodeURIComponent(id)}/cancel`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+
+  return {
+    message: result.message || "Order cancelled",
+    order: readOrder(result.data),
   };
 }

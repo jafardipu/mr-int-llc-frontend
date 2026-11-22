@@ -1,25 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { MapPin, ShoppingBag } from "lucide-react";
+import { Lock, MapPin, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   createAddressAction,
   deleteAddressAction,
   loadCheckoutCartAction,
+  loadCheckoutSummaryAction,
   loadMyAddressesAction,
   placeOrderAction,
   syncCheckoutCartAction,
-  validatePromoCodeAction,
 } from "@/actions/checkout.actions";
 import { createPaymentAction } from "@/actions/payments.actions";
-import { savePendingPayment } from "@/lib/payment-session";
-import type { PromoValidation } from "@/actions/promo-codes.service";
 import type { Address } from "@/services/address.service";
-import type { Cart } from "@/services/cart.service";
+import type { CheckoutSummary } from "@/services/orders.service";
 import EmptyState from "@/components/shared/empty-state/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import CountryStateCitySelector, {
@@ -27,14 +25,11 @@ import CountryStateCitySelector, {
 } from "@/components/ui/country-state-city-selector";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import {
-  clearCart,
+  removeFromCart,
   selectSelectedItems,
 } from "@/redux/features/cartSlice";
 
-type CheckoutFlowProps = {
-  shippingFee?: number;
-  tax?: number;
-};
+const loginUrl = `/login?callbackUrl=${encodeURIComponent("/cart/shipping-address")}`;
 
 function formatPrice(value: number) {
   return `$${value.toFixed(2)}`;
@@ -51,24 +46,26 @@ function formatAddress(address: Address) {
     .join(" · ");
 }
 
-export default function CheckoutFlow({
-  shippingFee = 5,
-  tax = 5,
-}: CheckoutFlowProps) {
+export default function CheckoutFlow() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const localSelected = useAppSelector(selectSelectedItems);
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
   const [authRequired, setAuthRequired] = useState(false);
-  const [cart, setCart] = useState<Cart | null>(null);
+  const [cartEmpty, setCartEmpty] = useState(false);
+  const [summary, setSummary] = useState<CheckoutSummary | null>(null);
+  const [summaryError, setSummaryError] = useState("");
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [notes, setNotes] = useState("");
   const [promoInput, setPromoInput] = useState("");
-  const [promo, setPromo] = useState<PromoValidation | null>(null);
   const [error, setError] = useState("");
+  // Stays true from "Place order" until the browser leaves for Stripe, so the
+  // button can't create a second order.
+  const [placing, setPlacing] = useState(false);
+  const placingRef = useRef(false);
 
   const {
     control,
@@ -89,10 +86,6 @@ export default function CheckoutFlow({
   });
   const [addressLine2, setAddressLine2] = useState("");
 
-  const subtotal = cart?.subtotal ?? 0;
-  const discount = promo?.discount ?? 0;
-  const total = Math.max(subtotal + shippingFee + tax - discount, 0);
-
   const selectedAddress = useMemo(
     () => addresses.find((address) => address.id === selectedAddressId) ?? null,
     [addresses, selectedAddressId],
@@ -105,6 +98,8 @@ export default function CheckoutFlow({
       setLoading(true);
       setError("");
 
+      // The server cart is what gets priced and checked out, so push the
+      // locally selected lines to it first.
       const syncItems = localSelected.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
@@ -118,38 +113,50 @@ export default function CheckoutFlow({
       if (!active) return;
 
       if (synced.status === "error") {
-        if (synced.statusCode === 401) {
-          setAuthRequired(true);
-          setLoading(false);
-          return;
-        }
-        setError(synced.message);
+        if (synced.statusCode === 401) setAuthRequired(true);
+        else setSummaryError(synced.message);
         setLoading(false);
         return;
       }
 
-      setCart(synced.data);
+      if (synced.data.itemCount <= 0) {
+        setCartEmpty(true);
+        setLoading(false);
+        return;
+      }
 
-      const addressResult = await loadMyAddressesAction();
+      const [summaryResult, addressResult] = await Promise.all([
+        loadCheckoutSummaryAction(),
+        loadMyAddressesAction(),
+      ]);
       if (!active) return;
 
-      if (addressResult.status === "error") {
-        if (addressResult.statusCode === 401) {
-          setAuthRequired(true);
-          setLoading(false);
-          return;
-        }
-        setError(addressResult.message);
+      if (
+        (summaryResult.status === "error" && summaryResult.statusCode === 401) ||
+        (addressResult.status === "error" && addressResult.statusCode === 401)
+      ) {
+        setAuthRequired(true);
         setLoading(false);
         return;
       }
 
-      setAddresses(addressResult.data);
-      const defaultAddress =
-        addressResult.data.find((address) => address.isDefault) ??
-        addressResult.data[0];
-      setSelectedAddressId(defaultAddress?.id ?? "");
-      setShowAddressForm(addressResult.data.length === 0);
+      if (summaryResult.status === "error") {
+        setSummaryError(summaryResult.message);
+      } else {
+        setSummary(summaryResult.data);
+      }
+
+      if (addressResult.status === "error") {
+        setError(addressResult.message);
+      } else {
+        setAddresses(addressResult.data);
+        const defaultAddress =
+          addressResult.data.find((address) => address.isDefault) ??
+          addressResult.data[0];
+        setSelectedAddressId(defaultAddress?.id ?? "");
+        setShowAddressForm(addressResult.data.length === 0);
+      }
+
       setLoading(false);
     }
 
@@ -160,25 +167,6 @@ export default function CheckoutFlow({
     // Sync once on mount from the local selected cart snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!promo || !cart) return;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        const result = await validatePromoCodeAction({
-          code: promo.code,
-          subtotal: cart.subtotal,
-        });
-        if (result.status === "error") {
-          setPromo(null);
-          setError(result.message);
-          return;
-        }
-        setPromo(result.data);
-      })();
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [cart?.subtotal, promo?.code]);
 
   const onCreateAddress = handleSubmit((values) => {
     startTransition(async () => {
@@ -195,9 +183,7 @@ export default function CheckoutFlow({
 
       if (result.status === "error") {
         if (result.statusCode === 401) {
-          router.push(
-            `/login?callbackUrl=${encodeURIComponent("/cart/shipping-address")}`,
-          );
+          router.push(loginUrl);
           return;
         }
         setError(result.message);
@@ -226,93 +212,105 @@ export default function CheckoutFlow({
   });
 
   const onApplyPromo = () => {
+    const code = promoInput.trim();
+    if (!code) return;
+
     startTransition(async () => {
       setError("");
-      const result = await validatePromoCodeAction({
-        code: promoInput,
-        subtotal,
-      });
+      const result = await loadCheckoutSummaryAction(code);
       if (result.status === "error") {
-        setPromo(null);
+        if (result.statusCode === 401) {
+          router.push(loginUrl);
+          return;
+        }
+        // Keep the previous summary; just explain why the code didn't apply.
         setError(result.message);
         toast.error(result.message);
         return;
       }
-      setPromo(result.data);
-      setPromoInput(result.data.code);
+      setSummary(result.data);
+      setPromoInput(result.data.promoCode ?? "");
       toast.success(result.message);
     });
   };
 
-  const onPlaceOrder = () => {
-    if (!selectedAddressId) {
-      setError("Select a shipping address to continue.");
-      return;
-    }
-    if (!cart || cart.itemCount <= 0) {
-      setError("Cart is empty");
-      return;
-    }
-
+  const onRemovePromo = () => {
     startTransition(async () => {
       setError("");
-      const result = await placeOrderAction({
-        addressId: selectedAddressId,
-        notes: notes.trim() || undefined,
-        shippingFee,
-        tax,
-        promoCode: promo?.code,
-      });
-
+      const result = await loadCheckoutSummaryAction();
       if (result.status === "error") {
-        if (result.statusCode === 401) {
-          router.push(
-            `/login?callbackUrl=${encodeURIComponent("/cart/shipping-address")}`,
-          );
-          return;
-        }
         setError(result.message);
         toast.error(result.message);
         return;
       }
+      setSummary(result.data);
+      setPromoInput("");
+    });
+  };
 
-      dispatch(clearCart());
-      toast.success(result.message);
+  const onPlaceOrder = async () => {
+    if (placingRef.current) return;
+    if (!selectedAddressId) {
+      setError("Select a shipping address to continue.");
+      return;
+    }
+    if (!summary) return;
 
-      const payment = await createPaymentAction({
-        orderId: result.data.id,
-        paymentMethod: "card",
-      });
+    placingRef.current = true;
+    setPlacing(true);
+    setError("");
 
-      if (payment.status === "error") {
-        toast.error(
-          payment.message ||
-            "Order placed, but payment could not be started.",
-        );
-        router.push(`/user/orders/${result.data.id}`);
+    const result = await placeOrderAction({
+      addressId: selectedAddressId,
+      notes: notes.trim() || undefined,
+      promoCode: summary.promoCode ?? undefined,
+    });
+
+    if (result.status === "error") {
+      console.error("[checkout] place order failed", result);
+      placingRef.current = false;
+      setPlacing(false);
+      if (result.statusCode === 401) {
+        router.push(loginUrl);
         return;
       }
+      setError(result.message);
+      toast.error(result.message);
+      return;
+    }
 
-      savePendingPayment({
-        orderId: result.data.id,
-        orderNumber: result.data.orderNumber,
-        amount: payment.data.payment.amount || result.data.total,
-        clientSecret: payment.data.clientSecret,
-        paymentIntentId: payment.data.paymentIntentId,
-      });
+    // Checkout emptied the server cart; drop the checked-out lines locally so
+    // the cart badge matches. Unselected lines stay in the local cart.
+    for (const item of localSelected) {
+      dispatch(removeFromCart(item.id));
+    }
 
-      router.push(`/user/orders/${result.data.id}/pay`);
-    });
+    const orderUrl = `/user/orders/${encodeURIComponent(result.data.id)}`;
+    const payment = await createPaymentAction(result.data.id);
+
+    if (payment.status === "error") {
+      // The order exists and can be paid later from its page ("Pay now").
+      console.error("[checkout] start payment failed", payment);
+      toast.error(
+        `Order ${result.data.orderNumber} was placed, but payment could not be started: ${payment.message}`,
+      );
+      router.push(orderUrl);
+      return;
+    }
+
+    toast.success("Order placed. Redirecting to secure payment…");
+    // External Stripe-hosted page: full navigation, not the Next.js router.
+    window.location.assign(payment.data.checkoutUrl);
   };
 
   if (authRequired) {
     return (
       <div className="rounded-2xl border border-[#E9E6DF] bg-white p-8 text-center">
         <p className="text-sm text-[#4B5563]">
-          Sign in with a retail or wholesale account to checkout.
+          Sign in with a verified retail or wholesale account to checkout.
         </p>
         <Link
-          href={`/login?callbackUrl=${encodeURIComponent("/cart/shipping-address")}`}
+          href={loginUrl}
           className="mt-4 inline-flex rounded-full bg-secondary-color px-5 py-3 text-xs font-bold uppercase tracking-wide text-white"
         >
           Sign in to continue
@@ -331,7 +329,7 @@ export default function CheckoutFlow({
     );
   }
 
-  if (!cart || cart.itemCount <= 0) {
+  if (cartEmpty) {
     return (
       <EmptyState
         icon={ShoppingBag}
@@ -340,6 +338,24 @@ export default function CheckoutFlow({
       />
     );
   }
+
+  if (!summary) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-[#E9E6DF] bg-white p-8 text-center">
+        <p role="alert" className="text-sm text-red-700">
+          {summaryError || "Unable to load the checkout summary."}
+        </p>
+        <Link
+          href="/cart"
+          className="mt-4 inline-flex rounded-full bg-secondary-color px-5 py-3 text-xs font-bold uppercase tracking-wide text-white"
+        >
+          Back to cart
+        </Link>
+      </div>
+    );
+  }
+
+  const busy = pending || placing;
 
   return (
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.9fr)]">
@@ -412,7 +428,7 @@ export default function CheckoutFlow({
                     <button
                       type="button"
                       className="text-xs font-medium text-red-600"
-                      disabled={pending}
+                      disabled={busy}
                       onClick={() => {
                         startTransition(async () => {
                           const result = await deleteAddressAction(address.id);
@@ -461,7 +477,7 @@ export default function CheckoutFlow({
               </div>
               <button
                 type="submit"
-                disabled={pending}
+                disabled={busy}
                 className="flex h-11 w-full items-center justify-center rounded-full bg-[#a45a1a] px-5 text-xs font-bold uppercase text-white transition-colors hover:bg-[#8e4c15] disabled:opacity-60"
               >
                 {pending ? "Saving..." : "Save address"}
@@ -490,16 +506,18 @@ export default function CheckoutFlow({
         </h2>
 
         <ul className="mt-4 space-y-3 border-b border-[#E9E9E7] pb-4">
-          {cart.items.map((item) => (
-            <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
+          {summary.items.map((item) => (
+            <li key={item.key} className="flex items-start justify-between gap-3 text-sm">
               <span className="min-w-0 text-[#4B5563]">
                 <span className="block truncate font-medium text-[#24231F]">
-                  {item.product?.name ?? "Product"}
+                  {item.name}
                 </span>
-                <span className="text-xs">Qty {item.quantity}</span>
+                <span className="text-xs">
+                  Qty {item.quantity} × {formatPrice(item.unitPrice)}
+                </span>
               </span>
               <span className="font-semibold text-[#24231F]">
-                {formatPrice(item.lineTotal)}
+                {formatPrice(item.total)}
               </span>
             </li>
           ))}
@@ -508,25 +526,27 @@ export default function CheckoutFlow({
         <dl className="mt-4 space-y-3 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-[#737373]">Sub total</dt>
-            <dd className="font-bold">{formatPrice(subtotal)}</dd>
+            <dd className="font-bold">{formatPrice(summary.subtotal)}</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="text-[#737373]">Est. Delivery</dt>
-            <dd className="font-bold">{formatPrice(shippingFee)}</dd>
+            <dt className="text-[#737373]">Shipping</dt>
+            <dd className="font-bold">{formatPrice(summary.shippingFee)}</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="text-[#737373]">Taxes</dt>
-            <dd className="font-bold text-rose-500">+{formatPrice(tax)}</dd>
+            <dt className="text-[#737373]">Tax</dt>
+            <dd className="font-bold">{formatPrice(summary.tax)}</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="text-[#737373]">Discount</dt>
+            <dt className="text-[#737373]">
+              Discount{summary.promoCode ? ` (${summary.promoCode})` : ""}
+            </dt>
             <dd className="font-bold text-emerald-600">
-              -{formatPrice(discount)}
+              -{formatPrice(summary.discount)}
             </dd>
           </div>
           <div className="flex justify-between gap-3 border-t border-[#E9E9E7] pt-3">
             <dt className="text-base font-medium text-[#55544F]">Total</dt>
-            <dd className="text-base font-bold">{formatPrice(total)}</dd>
+            <dd className="text-base font-bold">{formatPrice(summary.total)}</dd>
           </div>
         </dl>
 
@@ -536,41 +556,63 @@ export default function CheckoutFlow({
           </p>
         )}
 
-        <div className="mt-5 flex items-center gap-2 rounded-full border border-[#E8E7E3] bg-white p-1">
-          <label className="sr-only" htmlFor="checkout-promo-code">
-            Promo code
-          </label>
-          <input
-            id="checkout-promo-code"
-            value={promoInput}
-            onChange={(event) => setPromoInput(event.target.value)}
-            placeholder="Enter promo code"
-            autoComplete="off"
-            className="min-w-0 flex-1 bg-transparent px-2.5 py-3 text-xs outline-none placeholder:text-[#AAA9A4]"
-          />
-          <button
-            type="button"
-            disabled={pending || !promoInput.trim()}
-            onClick={onApplyPromo}
-            className="rounded-full bg-black px-4 py-2 text-[10px] font-bold uppercase text-white disabled:opacity-50"
+        {summary.promoCode ? (
+          <div className="mt-5 flex items-center justify-between gap-2 rounded-full border border-emerald-200 bg-emerald-50 py-1 pl-4 pr-1">
+            <span className="text-xs font-semibold text-emerald-700">
+              {summary.promoCode} applied
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onRemovePromo}
+              aria-label={`Remove promo code ${summary.promoCode}`}
+              className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-[10px] font-bold uppercase text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              <X size={12} aria-hidden="true" />
+              Remove
+            </button>
+          </div>
+        ) : (
+          <form
+            className="mt-5 flex items-center gap-2 rounded-full border border-[#E8E7E3] bg-white p-1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onApplyPromo();
+            }}
           >
-            Apply
-          </button>
-        </div>
-        {promo && (
-          <p className="mt-2 text-xs font-medium text-emerald-700">
-            {promo.code} applied (−{formatPrice(promo.discount)})
-          </p>
+            <label className="sr-only" htmlFor="checkout-promo-code">
+              Promo code
+            </label>
+            <input
+              id="checkout-promo-code"
+              value={promoInput}
+              onChange={(event) => setPromoInput(event.target.value)}
+              placeholder="Enter promo code"
+              autoComplete="off"
+              className="min-w-0 flex-1 bg-transparent px-2.5 py-3 text-xs outline-none placeholder:text-[#AAA9A4]"
+            />
+            <button
+              type="submit"
+              disabled={busy || !promoInput.trim()}
+              className="rounded-full bg-black px-4 py-2 text-[10px] font-bold uppercase text-white disabled:opacity-50"
+            >
+              Apply
+            </button>
+          </form>
         )}
 
         <button
           type="button"
-          disabled={pending || !selectedAddressId}
-          onClick={onPlaceOrder}
+          disabled={busy || !selectedAddressId}
+          onClick={() => void onPlaceOrder()}
           className="mt-4 w-full rounded-full bg-secondary-color px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-white transition hover:bg-[#5a3614] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {pending ? "Placing order..." : "Place Order"}
+          {placing ? "Placing order..." : "Place order & pay"}
         </button>
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-[#6B7280]">
+          <Lock size={12} aria-hidden="true" />
+          You&apos;ll pay securely on Stripe&apos;s checkout page.
+        </p>
       </aside>
     </div>
   );

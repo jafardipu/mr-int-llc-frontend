@@ -3,8 +3,8 @@ import type { OrderStatus } from "@/services/orders.service";
 
 const steps: Array<{ key: OrderStatus | "placed"; title: string }> = [
   { key: "placed", title: "Order Placed" },
-  { key: "pending", title: "Pending" },
-  { key: "processing", title: "Processing" },
+  { key: "pending", title: "Awaiting Payment" },
+  { key: "processing", title: "Paid & Processing" },
   { key: "completed", title: "Completed" },
 ];
 

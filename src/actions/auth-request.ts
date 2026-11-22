@@ -12,6 +12,8 @@ export class AuthApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    // Raw API response body, kept for debugging.
+    public readonly body?: unknown,
   ) {
     super(message);
     this.name = "AuthApiError";
@@ -81,10 +83,22 @@ export async function authRequest<T>(
   }
 
   if (!response.ok || payload.success === false) {
-    throw new AuthApiError(
+    const message =
       readMessage(payload) ??
-        `The request failed (${response.status}). Please try again.`,
+      `The request failed (${response.status}). Please try again.`;
+
+    console.error("[api error]", {
+      path,
+      status: response.status,
+      message,
+      body: payload,
+      raw: responseText.slice(0, 2000),
+    });
+
+    throw new AuthApiError(
+      message,
       response.status,
+      Object.keys(payload).length > 0 ? payload : responseText.slice(0, 2000),
     );
   }
 

@@ -1,15 +1,14 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { AuthApiError, authRequest } from "@/actions/auth-request";
+import {
+  AuthApiError,
+  authRequest,
+  type ApiEnvelope,
+} from "@/actions/auth-request";
 import { accessTokenCookie } from "@/lib/auth-cookies";
 import { isRecord } from "@/services/api-response";
 import type { PaymentStatus } from "@/services/orders.service";
-
-export type CreatePaymentInput = {
-  orderId: string;
-  paymentMethod?: "card";
-};
 
 export type PaymentRecord = {
   id: string;
@@ -21,10 +20,11 @@ export type PaymentRecord = {
   paidAt: string | null;
 };
 
+/** Stripe Checkout Session for an order (Stripe-hosted payment page). */
 export type CreatePaymentResult = {
-  payment: PaymentRecord;
-  clientSecret: string;
-  paymentIntentId: string;
+  checkoutUrl: string;
+  sessionId: string;
+  payment: PaymentRecord | null;
 };
 
 function readPayment(value: unknown): PaymentRecord | null {
@@ -42,70 +42,91 @@ function readPayment(value: unknown): PaymentRecord | null {
   };
 }
 
-export async function createPayment(input: CreatePaymentInput) {
-  const orderId = input.orderId.trim();
-  if (!orderId) throw new AuthApiError("Order is required", 400);
+function logApiError(endpoint: string, error: unknown) {
+  console.error(`[${endpoint}] API error`, {
+    status: error instanceof AuthApiError ? error.status : undefined,
+    message: error instanceof Error ? error.message : String(error),
+    body: error instanceof AuthApiError ? error.body : undefined,
+  });
+}
+
+/**
+ * Creates (or reuses) the order's Stripe Checkout Session. Fails for
+ * cancelled or already paid orders, and with 409 while a payment is still
+ * processing. Only call this from a user action, never from an effect.
+ */
+export async function createPayment(orderId: string) {
+  const id = orderId.trim();
+  if (!id) throw new AuthApiError("Order is required", 400);
 
   const token = (await cookies()).get(accessTokenCookie)?.value;
   if (!token) throw new AuthApiError("Please sign in again.", 401);
 
-  const result = await authRequest<unknown>("/payments/create", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      orderId,
-      paymentMethod: input.paymentMethod ?? "card",
-    }),
-  });
-
-  if (!isRecord(result.data)) {
-    throw new AuthApiError("Payment response was invalid.", 500);
+  let result: ApiEnvelope<unknown>;
+  try {
+    result = await authRequest<unknown>("/payments/create", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ orderId: id }),
+    });
+  } catch (error) {
+    logApiError("payments/create", error);
+    throw error;
   }
 
-  const payment = readPayment(result.data.payment);
-  const clientSecret =
-    typeof result.data.clientSecret === "string"
-      ? result.data.clientSecret
+  const data = isRecord(result.data) ? result.data : null;
+  const checkoutUrl =
+    typeof data?.checkoutUrl === "string" && /^https?:\/\//.test(data.checkoutUrl)
+      ? data.checkoutUrl
       : "";
-  const paymentIntentId =
-    typeof result.data.paymentIntentId === "string"
-      ? result.data.paymentIntentId
-      : "";
+  const sessionId = typeof data?.sessionId === "string" ? data.sessionId : "";
 
-  if (!payment || !clientSecret || !paymentIntentId) {
-    throw new AuthApiError("Payment response was invalid.", 500);
+  if (!checkoutUrl) {
+    console.error("[payments/create] response has no checkoutUrl", result.data);
+    throw new AuthApiError("Payment response was invalid.", 500, result.data);
   }
 
   return {
-    message: result.message || "Payment intent created successfully",
-    payment,
-    clientSecret,
-    paymentIntentId,
+    message: result.message || "Checkout session created",
+    checkoutUrl,
+    sessionId,
+    payment: readPayment(data?.payment),
   } satisfies CreatePaymentResult & { message: string };
 }
 
-export async function confirmPayment(paymentIntentId: string) {
-  const intentId = paymentIntentId.trim();
-  if (!intentId) {
-    throw new AuthApiError("Payment intent id is required", 400);
+/**
+ * Called by the /checkout/success page with Stripe's `session_id`. Public
+ * endpoint (no token) and safe to call more than once. When the session is
+ * paid the backend marks the payment `paid` and the order `processing`;
+ * otherwise it returns the payment with its current status.
+ */
+export async function confirmPayment(sessionId: string) {
+  const id = sessionId.trim();
+  if (!id) throw new AuthApiError("Payment session id is required", 400);
+
+  let result: ApiEnvelope<unknown>;
+  try {
+    result = await authRequest<unknown>(
+      `/payments/confirm-payment?sessionId=${encodeURIComponent(id)}`,
+      { method: "GET" },
+    );
+  } catch (error) {
+    logApiError("payments/confirm-payment", error);
+    throw error;
   }
 
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  const result = await authRequest<unknown>(
-    `/payments/confirm-payment?paymentIntentId=${encodeURIComponent(intentId)}`,
-    {
-      method: "GET",
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    },
-  );
+  const payment = readPayment(result.data);
+  const status =
+    isRecord(result.data) && typeof result.data.status === "string"
+      ? result.data.status
+      : (payment?.status ?? "pending");
 
   return {
-    message: result.message || "Payment confirmed successfully",
-    data: result.data,
+    message: result.message || "",
+    status,
+    payment,
   };
 }

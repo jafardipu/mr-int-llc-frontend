@@ -15,6 +15,8 @@ import {
 import OrderStatusBadge from "./OrderStatusBadge";
 import OrdersFilters from "./OrdersFilters";
 import OrderThumbnail from "./OrderThumbnail";
+import PaymentStatusBadge from "./PaymentStatusBadge";
+import PayNowButton from "./PayNowButton";
 
 const pageSize = 10;
 const statuses = new Set<OrderStatus>([
@@ -80,219 +82,15 @@ export default async function OrdersList({
       ? (statusParam as OrderStatus)
       : undefined;
 
+  let result: Awaited<ReturnType<typeof getMyOrders>>;
   try {
-    const result = await getMyOrders({
+    result = await getMyOrders({
       page,
       limit: pageSize,
       sort: "-createdAt",
       searchTerm,
       status,
     });
-
-    return (
-      <section className="space-y-7" aria-label="Orders">
-        <Suspense
-          fallback={
-            <div className="space-y-7">
-              <Skeleton className="h-11 w-full max-w-134 rounded-xl" />
-              <div className="flex gap-3">
-                {Array.from({ length: 5 }, (_, index) => (
-                  <Skeleton key={index} className="h-9 w-24 rounded-full" />
-                ))}
-              </div>
-            </div>
-          }
-        >
-          <OrdersFilters />
-        </Suspense>
-
-        {result.data.length === 0 ? (
-          <EmptyState
-            icon={searchTerm || status ? Search : Package}
-            message={
-              searchTerm || status
-                ? "No orders match these filters."
-                : "No orders yet."
-            }
-            className="min-h-64 rounded-2xl border border-[#e3e7ec] bg-white"
-          />
-        ) : (
-          <>
-            <div className="hidden overflow-hidden rounded-2xl border border-[#e3e7ec] bg-white shadow-[0_1px_3px_rgba(27,39,58,0.06)] md:block">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-190 border-collapse text-left">
-                  <thead className="bg-[#fafafa] text-sm font-semibold text-[#737b89]">
-                    <tr>
-                      <th scope="col" className="px-7 py-6">
-                        Order No.
-                      </th>
-                      <th scope="col" className="px-5 py-6">
-                        Date
-                      </th>
-                      <th scope="col" className="px-5 py-6">
-                        Items
-                      </th>
-                      <th scope="col" className="px-5 py-6">
-                        Total Amount
-                      </th>
-                      <th scope="col" className="px-5 py-6">
-                        Status
-                      </th>
-                      <th scope="col" className="px-5 py-6 text-center">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.data.map((order) => {
-                      const count = orderItemCount(order);
-                      const image = orderPrimaryImage(order);
-                      const unpaid = orderNeedsPayment(order);
-                      return (
-                        <tr
-                          key={order.id}
-                          className="border-t border-[#edf0f3] text-base"
-                        >
-                          <td className="whitespace-nowrap px-7 py-6">
-                            <span className="flex items-center gap-3">
-                              <OrderThumbnail
-                                image={image}
-                                alt={order.items[0]?.name ?? order.orderNumber}
-                              />
-                              <span className="font-semibold text-[#1f2937]">
-                                {order.orderNumber}
-                              </span>
-                            </span>
-                          </td>
-                          <td className="whitespace-nowrap px-5 py-6 text-[#737b89]">
-                            {formatDate(order.createdAt)}
-                          </td>
-                          <td className="whitespace-nowrap px-5 py-6 text-[#596273]">
-                            {count} {count === 1 ? "item" : "items"}
-                          </td>
-                          <td className="whitespace-nowrap px-5 py-6 font-semibold text-[#374151]">
-                            {currency.format(order.total)}
-                          </td>
-                          <td className="whitespace-nowrap px-5 py-6">
-                            <div className="flex flex-col items-start gap-2">
-                              <OrderStatusBadge status={order.status} />
-                              {order.payment?.status === "paid" ? (
-                                <span className="rounded-full bg-[#e5f7ed] px-2.5 py-0.5 text-xs font-semibold text-[#16a34a]">
-                                  Paid
-                                </span>
-                              ) : (
-                                <span className="rounded-full bg-[#fff4e5] px-2.5 py-0.5 text-xs font-semibold text-[#e58200]">
-                                  Unpaid
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-5 py-5">
-                            <div className="flex flex-wrap items-center justify-center gap-2">
-                              <Link
-                                href={`/user/orders/${order.id}`}
-                                className="rounded-xl border border-[#e1e5eb] px-4 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#995618]"
-                              >
-                                View
-                              </Link>
-                              {unpaid && (
-                                <Link
-                                  href={`/user/orders/${order.id}/pay`}
-                                  className="rounded-xl bg-[#995618] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#7a4513] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#995618]"
-                                >
-                                  Pay Now
-                                </Link>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <ul className="space-y-3 md:hidden">
-              {result.data.map((order) => {
-                const count = orderItemCount(order);
-                const image = orderPrimaryImage(order);
-                const unpaid = orderNeedsPayment(order);
-                return (
-                  <li
-                    key={order.id}
-                    className="rounded-2xl border border-[#e3e7ec] bg-white p-4 shadow-[0_1px_3px_rgba(27,39,58,0.06)]"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <OrderThumbnail
-                          image={image}
-                          alt={order.items[0]?.name ?? order.orderNumber}
-                        />
-                        <div>
-                          <p className="font-semibold text-[#1f2937]">
-                            {order.orderNumber}
-                          </p>
-                          <p className="mt-1 text-sm text-[#737b89]">
-                            {formatDate(order.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <OrderStatusBadge status={order.status} />
-                        {order.payment?.status === "paid" ? (
-                          <span className="rounded-full bg-[#e5f7ed] px-2.5 py-0.5 text-xs font-semibold text-[#16a34a]">
-                            Paid
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-[#fff4e5] px-2.5 py-0.5 text-xs font-semibold text-[#e58200]">
-                            Unpaid
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#edf0f3] pt-4">
-                      <div>
-                        <p className="text-sm text-[#737b89]">
-                          {count} {count === 1 ? "item" : "items"}
-                        </p>
-                        <p className="mt-1 font-semibold text-[#374151]">
-                          {currency.format(order.total)}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Link
-                          href={`/user/orders/${order.id}`}
-                          className="rounded-xl border border-[#e1e5eb] px-4 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb]"
-                        >
-                          View
-                        </Link>
-                        {unpaid && (
-                          <Link
-                            href={`/user/orders/${order.id}/pay`}
-                            className="rounded-xl bg-[#995618] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#7a4513]"
-                          >
-                            Pay Now
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {result.meta.total > result.meta.limit && (
-              <PaginationSection
-                total={result.meta.total}
-                current={result.meta.page}
-                pageSize={result.meta.limit}
-              />
-            )}
-          </>
-        )}
-      </section>
-    );
   } catch (error) {
     const message =
       error instanceof ApiRequestError
@@ -305,4 +103,179 @@ export default async function OrdersList({
       </p>
     );
   }
+
+  return (
+    <section className="space-y-7" aria-label="Orders">
+      <Suspense
+        fallback={
+          <div className="space-y-7">
+            <Skeleton className="h-11 w-full max-w-134 rounded-xl" />
+            <div className="flex gap-3">
+              {Array.from({ length: 5 }, (_, index) => (
+                <Skeleton key={index} className="h-9 w-24 rounded-full" />
+              ))}
+            </div>
+          </div>
+        }
+      >
+        <OrdersFilters />
+      </Suspense>
+
+      {result.data.length === 0 ? (
+        <EmptyState
+          icon={searchTerm || status ? Search : Package}
+          message={
+            searchTerm || status
+              ? "No orders match these filters."
+              : "No orders yet."
+          }
+          className="min-h-64 rounded-2xl border border-[#e3e7ec] bg-white"
+        />
+      ) : (
+        <>
+          <div className="hidden overflow-hidden rounded-2xl border border-[#e3e7ec] bg-white shadow-[0_1px_3px_rgba(27,39,58,0.06)] md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-190 border-collapse text-left">
+                <thead className="bg-[#fafafa] text-sm font-semibold text-[#737b89]">
+                  <tr>
+                    <th scope="col" className="px-7 py-6">
+                      Order No.
+                    </th>
+                    <th scope="col" className="px-5 py-6">
+                      Date
+                    </th>
+                    <th scope="col" className="px-5 py-6">
+                      Items
+                    </th>
+                    <th scope="col" className="px-5 py-6">
+                      Total Amount
+                    </th>
+                    <th scope="col" className="px-5 py-6">
+                      Status
+                    </th>
+                    <th scope="col" className="px-5 py-6 text-center">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.data.map((order) => {
+                    const count = orderItemCount(order);
+                    const image = orderPrimaryImage(order);
+                    const unpaid = orderNeedsPayment(order);
+                    return (
+                      <tr
+                        key={order.id}
+                        className="border-t border-[#edf0f3] text-base"
+                      >
+                        <td className="whitespace-nowrap px-7 py-6">
+                          <span className="flex items-center gap-3">
+                            <OrderThumbnail
+                              image={image}
+                              alt={order.items[0]?.name ?? order.orderNumber}
+                            />
+                            <span className="font-semibold text-[#1f2937]">
+                              {order.orderNumber}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-6 text-[#737b89]">
+                          {formatDate(order.createdAt)}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-6 text-[#596273]">
+                          {count} {count === 1 ? "item" : "items"}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-6 font-semibold text-[#374151]">
+                          {currency.format(order.total)}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-6">
+                          <div className="flex flex-col items-start gap-2">
+                            <OrderStatusBadge status={order.status} />
+                            <PaymentStatusBadge status={order.payment?.status} />
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-5">
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            <Link
+                              href={`/user/orders/${order.id}`}
+                              className="rounded-xl border border-[#e1e5eb] px-4 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#995618]"
+                            >
+                              View
+                            </Link>
+                            {unpaid && <PayNowButton orderId={order.id} />}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <ul className="space-y-3 md:hidden">
+            {result.data.map((order) => {
+              const count = orderItemCount(order);
+              const image = orderPrimaryImage(order);
+              const unpaid = orderNeedsPayment(order);
+              return (
+                <li
+                  key={order.id}
+                  className="rounded-2xl border border-[#e3e7ec] bg-white p-4 shadow-[0_1px_3px_rgba(27,39,58,0.06)]"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <OrderThumbnail
+                        image={image}
+                        alt={order.items[0]?.name ?? order.orderNumber}
+                      />
+                      <div>
+                        <p className="font-semibold text-[#1f2937]">
+                          {order.orderNumber}
+                        </p>
+                        <p className="mt-1 text-sm text-[#737b89]">
+                          {formatDate(order.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <OrderStatusBadge status={order.status} />
+                      <PaymentStatusBadge status={order.payment?.status} />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#edf0f3] pt-4">
+                    <div>
+                      <p className="text-sm text-[#737b89]">
+                        {count} {count === 1 ? "item" : "items"}
+                      </p>
+                      <p className="mt-1 font-semibold text-[#374151]">
+                        {currency.format(order.total)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Link
+                        href={`/user/orders/${order.id}`}
+                        className="rounded-xl border border-[#e1e5eb] px-4 py-2 text-sm font-medium text-[#374151] transition-colors hover:bg-[#f9fafb]"
+                      >
+                        View
+                      </Link>
+                      {unpaid && <PayNowButton orderId={order.id} />}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {result.meta.total > result.meta.limit && (
+            <PaginationSection
+              total={result.meta.total}
+              current={result.meta.page}
+              pageSize={result.meta.limit}
+            />
+          )}
+        </>
+      )}
+    </section>
+  );
 }

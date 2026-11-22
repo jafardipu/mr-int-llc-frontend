@@ -1,8 +1,7 @@
 "use client";
 
 import { Heart, Minus, Plus, ShoppingCart, Check as CheckIcon } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   addToWishlistAction,
@@ -12,7 +11,13 @@ import { runFavoriteAction } from "@/components/wishlist/favorite-toast";
 import { useWishlist } from "@/components/wishlist/WishlistProvider";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { addToCart, selectCartItems } from "@/redux/features/cartSlice";
+import type { ProductVolumeTier } from "@/services/products.service";
 import { toast } from "sonner";
+import WholesaleVolumeTiers, {
+  buildWholesaleTiers,
+  findActiveTier,
+  formatMoney,
+} from "./WholesaleVolumeTiers";
 
 type ProductFavoriteButtonProps = {
   productId: string;
@@ -117,6 +122,8 @@ export type ProductPurchaseControlsProduct = {
   amazonUrl?: string | null;
   walmartUrl?: string | null;
   isWholesale?: boolean;
+  /** Bulk pricing; only applied for wholesale customers. */
+  volumeTiers?: ProductVolumeTier[] | null;
 };
 
 type ProductPurchaseControlsProps = {
@@ -132,17 +139,29 @@ export function ProductPurchaseControls({
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
   const minQty = Math.max(1, product?.displayMinQty ?? 1);
+  // The page keys this component by product id, so quantity starts at the
+  // product's minimum whenever the product changes.
   const [quantity, setQuantity] = useState(minQty);
-
-  useEffect(() => {
-    setQuantity((current) => Math.max(minQty, current));
-  }, [minQty]);
 
   const effectiveStock = product?.stockCount ?? stockCount;
   const cartItemId = product?.id ?? "";
   const existingCartItem = cartItems.find((item) => item.id === cartItemId);
   const isInCart = Boolean(existingCartItem);
   const outOfStock = effectiveStock !== undefined && effectiveStock <= 0;
+
+  // Wholesale bulk pricing: the active tier follows the quantity, and its unit
+  // price is what goes into the cart. Retail customers keep the plain price.
+  const isWholesale = product?.isWholesale === true;
+  const basePrice = product?.price ?? 0;
+  const tiers = useMemo(
+    () =>
+      isWholesale
+        ? buildWholesaleTiers(product?.volumeTiers, basePrice, minQty)
+        : [],
+    [isWholesale, product?.volumeTiers, basePrice, minQty],
+  );
+  const activeTier = tiers.length > 0 ? findActiveTier(tiers, quantity) : null;
+  const unitPrice = activeTier?.unitPrice ?? basePrice;
 
   const handleAddToCart = () => {
     if (!product) {
@@ -165,7 +184,7 @@ export function ProductPurchaseControls({
         id: cartItemId,
         productId: product.id,
         title: product.title,
-        price: product.price,
+        price: unitPrice,
         image: product.image,
         imageAlt: product.imageAlt,
         quantity,
@@ -174,7 +193,10 @@ export function ProductPurchaseControls({
       }),
     );
 
-    toast.success(`Added ${quantity} × ${product.title} to cart!`, {
+    const message = activeTier
+      ? `Added ${quantity} × ${product.title} to cart at ${formatMoney(unitPrice)} each!`
+      : `Added ${quantity} × ${product.title} to cart!`;
+    toast.success(message, {
       action: {
         label: "View Cart",
         onClick: () => router.push("/cart"),
@@ -184,6 +206,15 @@ export function ProductPurchaseControls({
 
   return (
     <div className="mt-6 space-y-4">
+      {tiers.length > 0 && (
+        <WholesaleVolumeTiers
+          tiers={tiers}
+          activeKey={activeTier?.key ?? null}
+          stockCount={effectiveStock}
+          onSelect={(tier) => setQuantity(Math.max(minQty, tier.minQty))}
+        />
+      )}
+
       {isInCart && (
         <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
           <CheckIcon aria-hidden="true" className="size-4" />
@@ -243,6 +274,35 @@ export function ProductPurchaseControls({
           </p>
         )}
       </div>
+
+      {activeTier && (
+        <p
+          aria-live="polite"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[#4B5563]"
+        >
+          <span>
+            <span className="font-semibold text-[#1F2937]">
+              {formatMoney(unitPrice)}
+            </span>{" "}
+            / unit
+          </span>
+          {activeTier.savePercent > 0 && (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-[#16A34A]">
+              Save {Number(activeTier.savePercent.toFixed(1))}% (
+              {formatMoney((basePrice - unitPrice) * quantity)} off)
+            </span>
+          )}
+          <span aria-hidden="true" className="text-[#D1D5DB]">
+            |
+          </span>
+          <span>
+            Total{" "}
+            <span className="font-semibold text-[#1F2937]">
+              {formatMoney(unitPrice * quantity)}
+            </span>
+          </span>
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 xl:w-[80%]">
         <button

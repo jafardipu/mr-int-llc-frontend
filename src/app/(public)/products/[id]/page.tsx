@@ -283,11 +283,16 @@ async function ProductDetailsContent({ params }: ProductDetailsPageProps) {
               </ul>
             </div>
 
-            {product.volumeTiers && product.volumeTiers.length > 0 && (
-              <ProductVolumeTiers tiers={product.volumeTiers} />
-            )}
+            {/* Wholesale customers get interactive bulk-pricing cards inside
+                ProductPurchaseControls; everyone else sees the plain table. */}
+            {!product.isWholesale &&
+              product.volumeTiers &&
+              product.volumeTiers.length > 0 && (
+                <ProductVolumeTiers tiers={product.volumeTiers} />
+              )}
 
             <ProductPurchaseControls
+              key={product.id}
               stockCount={product.stock}
               product={{
                 id: product.id,
@@ -300,6 +305,7 @@ async function ProductDetailsContent({ params }: ProductDetailsPageProps) {
                 amazonUrl: product.amazonUrl,
                 walmartUrl: product.walmartUrl,
                 isWholesale: product.isWholesale,
+                volumeTiers: product.volumeTiers,
               }}
             />
 

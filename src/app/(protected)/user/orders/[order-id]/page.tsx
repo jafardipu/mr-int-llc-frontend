@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ApiRequestError } from "@/services/api-service";
-import { getOrderById, orderNeedsPayment } from "@/services/orders.service";
+import { getOrderById } from "@/services/orders.service";
 import OrderDetailsHeader from "../_components/OrderDetailsHeader";
 import OrderItemsCard from "../_components/OrderItemsCard";
 import OrderTimelineCard from "../_components/OrderTimelineCard";
@@ -62,11 +62,7 @@ async function OrderDetailsContent({ params }: OrderDetailsPageProps) {
         <OrderItemsCard order={order} />
         <aside className="space-y-5">
           <ShippingAddressCard address={order.address} />
-          <PaymentStatusCard
-            payment={order.payment}
-            orderId={order.id}
-            needsPayment={orderNeedsPayment(order)}
-          />
+          <PaymentStatusCard order={order} />
           <OrderTimelineCard status={order.status} createdAt={order.createdAt} />
           {order.notes && (
             <section className="rounded-2xl border border-[#edf0f3] bg-white p-5 shadow-[0_1px_3px_rgba(27,39,58,0.05)] sm:p-6">
