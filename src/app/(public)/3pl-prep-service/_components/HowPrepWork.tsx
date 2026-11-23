@@ -3,8 +3,8 @@ import { PackageCheck } from "lucide-react";
 
 const steps = [
   {
-    title: "Submit Your File",
-    description: "Upload your CSV or TSV file through our service form.",
+    title: "Submit Your Files",
+    description: "Upload your CSV or TSV files through our request form.",
     highlighted: true,
   },
   {

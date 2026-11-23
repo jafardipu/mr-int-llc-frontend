@@ -1,50 +1,50 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { prepServiceApi } from "@/services/prepService.api";
 import {
-  CreatePrepServiceInput,
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
+import { toast } from "sonner";
+import { readApiError } from "@/lib/apiClient";
+import { prepServiceApi } from "@/services/prepService.api";
+import type {
   PrepServiceQueryParams,
   PrepServiceRequest,
-  UpdatePrepServiceStatusInput,
 } from "@/types/prepService";
-import { toast } from "sonner";
 
 export const PREP_SERVICE_KEYS = {
   all: ["prep-services"] as const,
+  lists: () => [...PREP_SERVICE_KEYS.all, "my"] as const,
   my: (params?: PrepServiceQueryParams) =>
-    [...PREP_SERVICE_KEYS.all, "my", params] as const,
+    [...PREP_SERVICE_KEYS.lists(), params] as const,
   detail: (id: string) => [...PREP_SERVICE_KEYS.all, "detail", id] as const,
-  adminList: (params?: PrepServiceQueryParams) =>
-    [...PREP_SERVICE_KEYS.all, "admin", params] as const,
 };
 
-export function useMyPrepServices(params?: PrepServiceQueryParams) {
+/** 4xx answers (401, 403, 404…) won't change on a retry. */
+function retryUnlessClientError(failureCount: number, error: unknown) {
+  const status = readApiError(error).statusCode;
+  if (status && status >= 400 && status < 500) return false;
+  return failureCount < 1;
+}
+
+/**
+ * Refetches every prep-service list and detail. Call it when an in-app
+ * notification such as "Prep request approved" or "Prep request needs
+ * changes" arrives.
+ */
+export function refreshPrepServices(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: PREP_SERVICE_KEYS.all });
+}
+
+export function useMyPrepServices(params: PrepServiceQueryParams) {
   return useQuery({
     queryKey: PREP_SERVICE_KEYS.my(params),
     queryFn: () => prepServiceApi.getMyRequests(params),
-    select: (res) => {
-      // Backend may return res.data as an array or { data: [...], meta: {...} }
-      const body = res?.data as unknown;
-      if (Array.isArray(body)) {
-        return {
-          data: body as PrepServiceRequest[],
-          meta: res?.meta ?? { page: 1, limit: 10, total: body.length },
-        };
-      }
-      if (body && typeof body === "object" && "data" in body) {
-        const nested = body as {
-          data: PrepServiceRequest[];
-          meta?: { page: number; limit: number; total: number };
-        };
-        return {
-          data: Array.isArray(nested.data) ? nested.data : [],
-          meta: nested.meta ?? res?.meta ?? { page: 1, limit: 10, total: 0 },
-        };
-      }
-      return {
-        data: [] as PrepServiceRequest[],
-        meta: res?.meta ?? { page: 1, limit: 10, total: 0 },
-      };
-    },
+    placeholderData: keepPreviousData,
+    // The admin changes statuses; pick that up when the customer comes back.
+    refetchOnWindowFocus: true,
+    retry: retryUnlessClientError,
   });
 }
 
@@ -52,45 +52,36 @@ export function usePrepServiceDetail(id: string) {
   return useQuery({
     queryKey: PREP_SERVICE_KEYS.detail(id),
     queryFn: () => prepServiceApi.getById(id),
-    select: (res) => res.data,
     enabled: Boolean(id),
+    refetchOnWindowFocus: true,
+    retry: retryUnlessClientError,
   });
 }
 
+function storeRequest(queryClient: QueryClient, request: PrepServiceRequest) {
+  queryClient.setQueryData(PREP_SERVICE_KEYS.detail(request.id), request);
+  return queryClient.invalidateQueries({ queryKey: PREP_SERVICE_KEYS.lists() });
+}
+
+/** Errors are not toasted here; the form shows them next to the file picker. */
 export function useCreatePrepService() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreatePrepServiceInput) => prepServiceApi.create(input),
-    onSuccess: () => {
-      toast.success("Prep service request submitted successfully");
-      queryClient.invalidateQueries({ queryKey: PREP_SERVICE_KEYS.all });
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to submit prep service request"
-      );
+    mutationFn: (files: File[]) => prepServiceApi.create(files),
+    onSuccess: (request) => {
+      toast.success("Prep request submitted. Our team will review your files.");
+      void storeRequest(queryClient, request);
     },
   });
 }
 
-export function useUpdatePrepServiceStatus(id: string) {
+export function useResubmitPrepService(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: UpdatePrepServiceStatusInput) =>
-      prepServiceApi.updateStatus(id, payload),
-    onSuccess: () => {
-      toast.success("Status updated successfully");
-      queryClient.invalidateQueries({ queryKey: PREP_SERVICE_KEYS.all });
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to update status"
-      );
+    mutationFn: (files: File[]) => prepServiceApi.resubmit(id, files),
+    onSuccess: (request) => {
+      toast.success("Files resubmitted. Your request is back under review.");
+      void storeRequest(queryClient, request);
     },
   });
 }
-

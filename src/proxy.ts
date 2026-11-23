@@ -9,6 +9,8 @@ const authPages = [
   "/reset-password",
 ];
 
+const prepRequestPage = "/3pl-prep-service/prep-request";
+
 export function proxy(request: NextRequest) {
   const isLoggedIn = Boolean(request.cookies.get(accessTokenCookie)?.value);
   const { pathname } = request.nextUrl;
@@ -16,8 +18,10 @@ export function proxy(request: NextRequest) {
   const isAuthPage = authPages.some(
     (page) => pathname === page || pathname.startsWith(`${page}/`),
   );
+  // Submitting a prep request needs an account; sign in before picking files.
+  const needsLogin = isUserRoute || pathname === prepRequestPage;
 
-  if (isUserRoute && !isLoggedIn) {
+  if (needsLogin && !isLoggedIn) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
@@ -34,6 +38,7 @@ export const config = {
   matcher: [
     "/user",
     "/user/:path*",
+    "/3pl-prep-service/prep-request",
     "/login",
     "/sign-up",
     "/verify-otp",

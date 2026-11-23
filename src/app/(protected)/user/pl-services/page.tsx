@@ -5,8 +5,8 @@ export default function PlServicePage() {
   return (
     <div className="space-y-7">
       <SectionTitle
-        title="My 3PL Services Requests"
-        subTitle="View and track the status of all your 3PL prep requests."
+        title="Prep Services"
+        subTitle="Track your 3PL prep requests and upload corrected files when our team asks for changes."
         btn={false}
         className="space-y-1 lg:space-y-1.5"
         subTitleClass="max-w-xl text-[#6B7280]"

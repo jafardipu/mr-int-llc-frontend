@@ -8,6 +8,18 @@ const nextConfig: NextConfig = {
         destination: "/home",
         permanent: false,
       },
+      // Old prep-service URLs: the list lives in the account area, and the
+      // corrected-files form is now on the request's details page.
+      {
+        source: "/3pl-prep-service/my-prep-requests",
+        destination: "/user/pl-services",
+        permanent: false,
+      },
+      {
+        source: "/user/pl-services/:id/correction",
+        destination: "/user/pl-services/:id",
+        permanent: false,
+      },
     ];
   },
 

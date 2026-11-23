@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { Order } from "@/services/orders.service";
 import OrderStatusBadge from "./OrderStatusBadge";
-import PrintInvoiceButton from "./PrintInvoiceButton";
+import DownloadInvoiceButton from "./DownloadInvoiceButton";
 
 function formatDateTime(value: string) {
   if (!value) return "—";
@@ -47,7 +47,7 @@ export default function OrderDetailsHeader({ order }: { order: Order }) {
           </div>
         </div>
 
-        <PrintInvoiceButton />
+        <DownloadInvoiceButton order={order} />
       </div>
     </header>
   );

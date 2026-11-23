@@ -1,64 +1,76 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { usePrepServiceDetail } from "@/hooks/usePrepService";
+import { readApiError } from "@/lib/apiClient";
+import SessionExpired from "../../_components/SessionExpired";
 import PrepRequestDetails from "./PrepRequestDetails";
 
-export default function PrepRequestDetailView({
-  requestId,
-}: {
-  requestId: string;
-}) {
-  const {
-    data: request,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = usePrepServiceDetail(requestId);
+function errorCopy(statusCode: number | undefined, message: string) {
+  if (statusCode === 403) {
+    return { title: "You can't view this request", body: "It belongs to a different account.", canRetry: false };
+  }
+  if (statusCode === 404) {
+    return { title: "Request not found", body: "It may have been removed, or the link is wrong.", canRetry: false };
+  }
+  return { title: "Failed to load this request", body: message, canRetry: true };
+}
 
-  if (isLoading) {
+export default function PrepRequestDetailView({ requestId }: { requestId: string }) {
+  const { data: request, isPending, isError, error, refetch, isRefetching } =
+    usePrepServiceDetail(requestId);
+
+  if (isPending) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-[#edf0f3] bg-white py-20 text-center shadow-xs">
-        <Loader2 className="size-8 animate-spin text-secondary-color" />
-        <p className="mt-3 text-sm font-medium text-[#718096]">
-          Loading request details...
-        </p>
+      <div aria-busy="true" aria-label="Loading prep request" className="space-y-5">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-16 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="aspect-square rounded-xl" />
+          ))}
+        </div>
       </div>
     );
   }
 
-  if (isError || !request) {
+  if (isError) {
+    const { statusCode, message } = readApiError(error, "Please try again.");
+    if (statusCode === 401) {
+      return <SessionExpired callbackUrl={`/user/pl-services/${encodeURIComponent(requestId)}`} />;
+    }
+    const copy = errorCopy(statusCode, message);
+
     return (
       <div className="space-y-4">
         <Link
           href="/user/pl-services"
           className="inline-flex items-center gap-1.5 text-sm text-[#64748b] transition-colors hover:text-[#995618]"
         >
-          <ArrowLeft size={15} />
-          Back to requests
+          <ArrowLeft size={15} aria-hidden="true" />
+          Back to prep requests
         </Link>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-          <p className="text-sm font-semibold text-red-800">
-            Request not found or failed to load
-          </p>
-          <p className="mt-1 text-xs text-red-600">
-            {(error as any)?.message ||
-              "Could not retrieve details for this preparation request."}
-          </p>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="mt-3 inline-flex items-center justify-center rounded-full bg-red-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-red-700 cursor-pointer"
-          >
-            Retry
-          </button>
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+          <p className="text-sm font-semibold text-red-800">{copy.title}</p>
+          <p className="mt-1 text-xs text-red-600">{copy.body}</p>
+          {copy.canRetry && (
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isRefetching}
+              className="mt-3 inline-flex cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            >
+              {isRefetching ? "Retrying…" : "Retry"}
+            </button>
+          )}
         </div>
       </div>
     );
   }
 
-  return <PrepRequestDetails request={request} />;
+  return <PrepRequestDetails request={request} onRefresh={() => void refetch()} />;
 }
-
