@@ -85,6 +85,10 @@ export default function CheckoutFlow() {
     },
   });
   const [addressLine2, setAddressLine2] = useState("");
+  // Unchecked keeps the current default. A user's first address is always
+  // the default, so the checkbox is forced on when they have none.
+  const [makeDefault, setMakeDefault] = useState(false);
+  const isFirstAddress = addresses.length === 0;
 
   const selectedAddress = useMemo(
     () => addresses.find((address) => address.id === selectedAddressId) ?? null,
@@ -178,7 +182,8 @@ export default function CheckoutFlow() {
         state: values.state,
         postalCode: values.zipCode,
         country: values.country,
-        isDefault: addresses.length === 0,
+        // The backend clears the previous default when this is true.
+        isDefault: isFirstAddress || makeDefault,
       });
 
       if (result.status === "error") {
@@ -195,7 +200,10 @@ export default function CheckoutFlow() {
         const next = result.data.isDefault
           ? current.map((address) => ({ ...address, isDefault: false }))
           : current;
-        return [result.data, ...next];
+        // Match the API order: default first, then newest (sort is stable).
+        return [result.data, ...next].sort(
+          (a, b) => Number(b.isDefault) - Number(a.isDefault),
+        );
       });
       setSelectedAddressId(result.data.id);
       setShowAddressForm(false);
@@ -207,6 +215,7 @@ export default function CheckoutFlow() {
         zipCode: "",
       });
       setAddressLine2("");
+      setMakeDefault(false);
       toast.success(result.message);
     });
   });
@@ -474,6 +483,26 @@ export default function CheckoutFlow() {
                   onChange={(event) => setAddressLine2(event.target.value)}
                   className="h-11 w-full rounded-lg border border-[#E1E5EA] bg-white px-4 text-sm outline-none focus:border-[#a45a1a]"
                 />
+              </div>
+              <div>
+                <label className="flex cursor-pointer items-start gap-3 has-disabled:cursor-default">
+                  <input
+                    type="checkbox"
+                    checked={isFirstAddress || makeDefault}
+                    disabled={isFirstAddress}
+                    onChange={(event) => setMakeDefault(event.target.checked)}
+                    aria-describedby="make-default-hint"
+                    className="mt-0.5 size-4 accent-[#a45a1a]"
+                  />
+                  <span className="text-sm font-medium text-[#273449]">
+                    Make this my default address
+                  </span>
+                </label>
+                <p id="make-default-hint" className="mt-1 pl-7 text-xs text-[#6B7280]">
+                  {isFirstAddress
+                    ? "Your first address is saved as your default."
+                    : "Leave unchecked to keep your current default address."}
+                </p>
               </div>
               <button
                 type="submit"
