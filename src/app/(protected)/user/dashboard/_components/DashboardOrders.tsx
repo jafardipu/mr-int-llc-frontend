@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiRequestError } from "@/services/api-service";
+import { redirectIfWholesaleFeeRequired } from "@/services/wholesale-fee.service";
 import {
   getMyDashboard,
   type CustomerDashboard,
@@ -30,10 +31,16 @@ export default async function DashboardOrders() {
   try {
     dashboard = await getMyDashboard();
   } catch (error) {
+    redirectIfWholesaleFeeRequired(error);
     const status = error instanceof ApiRequestError ? error.status : undefined;
 
     if (status === 401) {
-      return <SessionExpired callbackUrl="/user/dashboard" />;
+      return (
+        <SessionExpired
+          callbackUrl="/user/dashboard"
+          message={error instanceof Error ? error.message : undefined}
+        />
+      );
     }
 
     if (status === 403) {

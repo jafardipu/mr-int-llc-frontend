@@ -7,6 +7,7 @@ import { useWishlist } from "@/components/wishlist/WishlistProvider";
 import { removeFromWishlistAction } from "@/actions/wishlist.actions";
 import type { TProducts } from "@/types/products";
 import FavoritesEmpty from "./FavoritesEmpty";
+import { goToWholesaleFeeIfRequired } from "@/lib/wholesale-fee";
 
 export type FavoriteCard = {
   wishlistItemId: string;
@@ -30,6 +31,7 @@ export default function FavoritesList({ items }: { items: FavoriteCard[] }) {
     setPendingId("");
 
     if (result.status === "error") {
+      if (goToWholesaleFeeIfRequired(result.statusCode)) return;
       setError(result.message);
       if (result.statusCode === 404) {
         wishlist.forget(productId);

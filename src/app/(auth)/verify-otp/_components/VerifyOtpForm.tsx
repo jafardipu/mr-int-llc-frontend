@@ -14,6 +14,8 @@ import {
   verifySignupOtpAction,
 } from "@/actions/auth.actions";
 import type { AuthActionState } from "@/actions/auth.types";
+import { announceAuthChange } from "@/lib/client-session";
+import { wholesaleFeePath } from "@/lib/wholesale-fee";
 
 const initialState: AuthActionState = { status: "idle", message: "" };
 
@@ -33,9 +35,17 @@ export default function VerifyOTpForm({ email }: { email: string }) {
 
   useEffect(() => {
     if (state.status !== "success") return;
+    // Sign-up verification signs the user in (access token only).
+    if (state.flow !== "reset") announceAuthChange("login");
 
-    router.replace(state.flow === "reset" ? "/reset-password" : "/user/dashboard");
-  }, [router, state.flow, state.status]);
+    router.replace(
+      state.flow === "reset"
+        ? "/reset-password"
+        : state.wholesaleFeeRequired
+          ? wholesaleFeePath
+          : "/user/dashboard",
+    );
+  }, [router, state.flow, state.status, state.wholesaleFeeRequired]);
 
   useEffect(() => {
     if (resendState.status !== "success") return;

@@ -8,6 +8,9 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { loginAction } from "@/actions/auth.actions";
 import type { AuthActionState } from "@/actions/auth.types";
+import { isSessionEndReason, sessionEndMessages } from "@/lib/auth-session";
+import { announceAuthChange } from "@/lib/client-session";
+import { wholesaleFeePath } from "@/lib/wholesale-fee";
 
 const initialState: AuthActionState = { status: "idle", message: "" };
 
@@ -15,17 +18,31 @@ export default function LoginForm() {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
-  const callbackUrl = useSearchParams().get("callbackUrl");
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
+  // Why the last session ended (expired, blocked, not verified).
+  const reason = searchParams.get("reason");
+  const sessionNotice = isSessionEndReason(reason)
+    ? sessionEndMessages[reason]
+    : null;
 
   useEffect(() => {
     if (state.status !== "success") return;
+    announceAuthChange("login");
 
-    const destination =
+    const safeCallback =
       callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
         ? callbackUrl
-        : "/user/dashboard";
+        : null;
+    // An unpaid wholesale account pays its fee first; keep a callback that
+    // already points into the fee pages (e.g. back from Stripe).
+    const destination = state.wholesaleFeeRequired
+      ? safeCallback?.startsWith(wholesaleFeePath)
+        ? safeCallback
+        : wholesaleFeePath
+      : (safeCallback ?? "/user/dashboard");
     router.replace(destination);
-  }, [callbackUrl, router, state.status]);
+  }, [callbackUrl, router, state.status, state.wholesaleFeeRequired]);
 
   return (
     <div className="w-full xl:max-w-4xl md:max-w-xl mx-auto rounded-lg bg-white p-8 shadow-lg">
@@ -47,6 +64,15 @@ export default function LoginForm() {
         Welcome Back
       </h1>
       <p className="mb-6 text-center">Sign in to your account</p>
+
+      {sessionNotice && state.status === "idle" && (
+        <p
+          role="status"
+          className="mb-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800"
+        >
+          {sessionNotice}
+        </p>
+      )}
 
       {state.message && (
         <p

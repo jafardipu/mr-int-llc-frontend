@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import Container from "@/components/container/Container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiRequestError } from "@/services/api-service";
@@ -63,6 +63,7 @@ async function BrandShopDetailsContent({
       </Container>
     );
   } catch (error) {
+    unstable_rethrow(error);
     const message =
       error instanceof ApiRequestError
         ? error.message

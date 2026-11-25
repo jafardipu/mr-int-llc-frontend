@@ -22,7 +22,7 @@ import { UserAvatar } from "@/components/shared/user/UserAvatar";
 import { profileRoleLabel } from "@/lib/profile";
 import { useAppDispatch } from "@/redux/hooks";
 import { logout } from "@/redux/features/authSlice";
-import { logoutAction } from "@/actions/auth.actions";
+import { signOut } from "@/lib/client-session";
 
 export default function DashboardSidebar({
   name,
@@ -39,7 +39,7 @@ export default function DashboardSidebar({
   const dispatch = useAppDispatch();
 
   const handleLogout = async () => {
-    await logoutAction();
+    await signOut();
     dispatch(logout());
     router.push("/login");
     router.refresh();

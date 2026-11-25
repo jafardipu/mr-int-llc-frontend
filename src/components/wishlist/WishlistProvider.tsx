@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { loadWishlistIndexAction } from "@/actions/wishlist.actions";
+import { useWholesaleFeeState } from "@/components/wholesale-fee/wholesale-fee-store";
 import LoginPromptModal from "./LoginPromptModal";
 
 type WishlistContextValue = {
@@ -31,6 +32,10 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loginCallbackUrl, setLoginCallbackUrl] = useState("/products");
 
+  // The wishlist is off while a wholesale fee is unpaid. Reload the index
+  // whenever that changes, e.g. right after the fee is paid.
+  const wholesaleFeeRequired = useWholesaleFeeState().required;
+
   useEffect(() => {
     let active = true;
 
@@ -45,7 +50,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [wholesaleFeeRequired]);
 
   const openLoginModal = (callbackUrl?: string) => {
     if (callbackUrl) {

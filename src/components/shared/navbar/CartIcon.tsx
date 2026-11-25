@@ -8,11 +8,14 @@ import {
   selectCartItemsCount,
   selectCartTotalAmount,
 } from "@/redux/features/cartSlice";
+import { useWholesaleFeeState } from "@/components/wholesale-fee/wholesale-fee-store";
+import { wholesaleFeePath } from "@/lib/wholesale-fee";
 
 export default function CartIcon({ compact = false }: { compact?: boolean }) {
   const [mounted, setMounted] = useState(false);
   const itemsCount = useAppSelector(selectCartItemsCount);
   const totalAmount = useAppSelector(selectCartTotalAmount);
+  const wholesaleFee = useWholesaleFeeState();
 
   useEffect(() => {
     setMounted(true);
@@ -20,11 +23,19 @@ export default function CartIcon({ compact = false }: { compact?: boolean }) {
 
   const count = mounted ? itemsCount : 0;
   const formattedTotal = mounted ? `$${totalAmount.toFixed(2)}` : "$0.00";
+  // Unpaid wholesale fee: the cart can't be used yet, so this goes to the
+  // payment page instead.
+  const feeRequired = wholesaleFee.required;
 
   return (
     <Link
-      href="/cart"
-      aria-label={`Your Cart, ${count} items, total ${formattedTotal}`}
+      href={feeRequired ? wholesaleFeePath : "/cart"}
+      aria-label={
+        feeRequired
+          ? "Pay wholesale fee to continue"
+          : `Your Cart, ${count} items, total ${formattedTotal}`
+      }
+      title={feeRequired ? "Pay wholesale fee to continue" : undefined}
       className={`flex shrink-0 items-center ${compact ? "gap-0" : "gap-3.5"}`}
       role="group"
     >

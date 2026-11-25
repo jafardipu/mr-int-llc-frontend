@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ApiRequestError, apiGet } from "@/services/api-service";
+import { apiGet, isMissingResourceError } from "@/services/api-service";
 import {
   collectPages,
   isRecord,
@@ -9,7 +9,11 @@ import {
   type ApiPage,
   type ApiResponse,
 } from "@/services/api-response";
-import { isProduct, type Product } from "@/services/products.service";
+import {
+  isProduct,
+  withBannerPricing,
+  type Product,
+} from "@/services/products.service";
 
 const categoriesTag = "catalog-categories";
 
@@ -76,7 +80,7 @@ function readCategoryDetail(value: unknown): CategoryDetail | null {
   if (!category || !isRecord(value)) return null;
 
   const products = Array.isArray(value.products)
-    ? value.products.filter(isProduct)
+    ? value.products.filter(isProduct).map(withBannerPricing)
     : [];
 
   return { ...category, products };
@@ -126,7 +130,7 @@ export async function getCategoryById(
     const category = readCategoryDetail(parseApiItem(result, resource, isRecord));
     return category && !category.isDeleted ? category : null;
   } catch (error) {
-    if (error instanceof ApiRequestError && error.status === 404) {
+    if (isMissingResourceError(error)) {
       return null;
     }
     throw error;

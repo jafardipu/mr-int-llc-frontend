@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ApiRequestError } from "@/services/api-service";
+import { redirectIfWholesaleFeeRequired } from "@/services/wholesale-fee.service";
 import { getOrderById } from "@/services/orders.service";
 import OrderDetailsHeader from "../_components/OrderDetailsHeader";
 import OrderItemsCard from "../_components/OrderItemsCard";
@@ -40,6 +41,7 @@ async function OrderDetailsContent({ params }: OrderDetailsPageProps) {
   try {
     order = await getOrderById(orderId);
   } catch (error) {
+    redirectIfWholesaleFeeRequired(error);
     const message =
       error instanceof ApiRequestError
         ? error.message

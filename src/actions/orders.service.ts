@@ -1,8 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { AuthApiError, authRequest } from "@/actions/auth-request";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { readOrder, type Order } from "@/services/orders.service";
 
 /**
@@ -28,30 +26,23 @@ export type PlacedOrder = Pick<
   | "promoCode"
 >;
 
-async function accessToken() {
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) throw new AuthApiError("Please sign in again.", 401);
-  return token;
-}
-
 export async function placeOrder(input: PlaceOrderInput) {
   const addressId = input.addressId.trim();
   if (!addressId) throw new AuthApiError("Address is required", 400);
-
-  const token = await accessToken();
 
   const body: Record<string, string> = { addressId };
   if (input.notes?.trim()) body.notes = input.notes.trim();
   if (input.promoCode?.trim()) body.promoCode = input.promoCode.trim();
 
-  const result = await authRequest<unknown>("/orders/checkout", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const result = await authRequest<unknown>(
+    "/orders/checkout",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    { auth: "required" },
+  );
 
   const order = readOrder(result.data);
   if (!order) {
@@ -79,13 +70,10 @@ export async function cancelOrder(orderId: string) {
   const id = orderId.trim();
   if (!id) throw new AuthApiError("Order is required", 400);
 
-  const token = await accessToken();
   const result = await authRequest<unknown>(
     `/orders/${encodeURIComponent(id)}/cancel`,
-    {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
-    },
+    { method: "PATCH" },
+    { auth: "required" },
   );
 
   return {

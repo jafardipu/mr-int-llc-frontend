@@ -5,6 +5,7 @@ import EmptyState from "@/components/shared/empty-state/EmptyState";
 import PaginationSection from "@/components/shared/pagination/PaginationSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiRequestError } from "@/services/api-service";
+import { redirectIfWholesaleFeeRequired } from "@/services/wholesale-fee.service";
 import {
   getMyOrders,
   orderItemCount,
@@ -92,6 +93,7 @@ export default async function OrdersList({
       status,
     });
   } catch (error) {
+    redirectIfWholesaleFeeRequired(error);
     const message =
       error instanceof ApiRequestError
         ? error.message

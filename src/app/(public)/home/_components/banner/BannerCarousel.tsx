@@ -11,6 +11,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { bannerHref, bannerLinkLabel } from "@/lib/banner-links";
 import type { Banner } from "@/services/banners.service";
 
 const springTransition = {
@@ -111,7 +112,8 @@ export default function BannerCarousel({ banners }: { banners: Banner[] }) {
       startOffset: x.get(),
       startIndex: activeIndex,
     };
-    viewport.setPointerCapture(event.pointerId);
+    // Don't capture the pointer here: a captured pointer retargets the
+    // following click to the viewport, so a plain click never reaches the link.
     setIsPaused(true);
   };
 
@@ -123,6 +125,10 @@ export default function BannerCarousel({ banners }: { banners: Banner[] }) {
     const deltaY = event.clientY - drag.startY;
     if (Math.abs(deltaX) < 5 || Math.abs(deltaX) < Math.abs(deltaY)) return;
 
+    const viewport = viewportRef.current;
+    if (viewport && !viewport.hasPointerCapture(event.pointerId)) {
+      viewport.setPointerCapture(event.pointerId);
+    }
     suppressClickRef.current = true;
     setIsDragging(true);
     x.set(Math.min(0, Math.max(-maxDrag, drag.startOffset + deltaX)));
@@ -204,7 +210,7 @@ export default function BannerCarousel({ banners }: { banners: Banner[] }) {
             style={{ x }}
           >
             {banners.map((banner, index) => {
-              const href = banner.link?.trim() || "/products";
+              const href = bannerHref(banner);
 
               return (
                 <article
@@ -234,7 +240,7 @@ export default function BannerCarousel({ banners }: { banners: Banner[] }) {
                   <Link
                     href={href}
                     className="absolute inset-0 z-10"
-                    aria-label={`Open banner link ${index + 1}`}
+                    aria-label={bannerLinkLabel(banner, index)}
                     onClick={(event) => {
                       if (suppressClickRef.current) {
                         event.preventDefault();

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { PackageSearch } from "lucide-react";
 import Container from "@/components/container/Container";
 import EmptyState from "@/components/shared/empty-state/EmptyState";
@@ -81,6 +81,7 @@ async function CategoryDetailContent({ params }: CategoryPageProps) {
       </Container>
     );
   } catch (error) {
+    unstable_rethrow(error);
     const message =
       error instanceof ApiRequestError
         ? error.message

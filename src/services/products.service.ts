@@ -1,8 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-import { accessTokenCookie } from "@/lib/auth-cookies";
-import { ApiRequestError, apiGet } from "@/services/api-service";
+import { apiGet, isMissingResourceError } from "@/services/api-service";
 import {
   isRecord,
   parseApiItem,
@@ -63,6 +61,13 @@ export interface ProductReview {
   user: ProductReviewUser | null;
 }
 
+/** A homepage banner offer that is currently lowering this product's price. */
+export interface ProductBannerDiscount {
+  percent: number;
+  endsAt: string;
+  bannerId: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -91,9 +96,13 @@ export interface Product {
   brand: ProductBrand | null;
   category: ProductCategory | null;
   images: ProductImage[] | null;
+  /** What the customer pays, already including any banner discount. */
   displayPrice?: number;
   displayMinQty?: number;
   isWholesale?: boolean;
+  /** Price before the banner discount; null when no banner discount applies. */
+  originalPrice?: number | null;
+  bannerDiscount?: ProductBannerDiscount | null;
 }
 
 export interface ProductDetail extends Product {
@@ -101,6 +110,8 @@ export interface ProductDetail extends Product {
   displayPrice: number;
   displayMinQty: number;
   isWholesale: boolean;
+  originalPrice: number | null;
+  bannerDiscount: ProductBannerDiscount | null;
 }
 
 export type ProductsResponse = ApiResponse<ApiPage<Product>>;
@@ -228,6 +239,49 @@ export function isProduct(value: unknown): value is Product {
   );
 }
 
+function readBannerDiscount(value: unknown): ProductBannerDiscount | null {
+  if (
+    !isRecord(value) ||
+    typeof value.percent !== "number" ||
+    !Number.isFinite(value.percent) ||
+    value.percent <= 0 ||
+    typeof value.endsAt !== "string" ||
+    Number.isNaN(Date.parse(value.endsAt)) ||
+    typeof value.bannerId !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    percent: value.percent,
+    endsAt: value.endsAt,
+    bannerId: value.bannerId,
+  };
+}
+
+/**
+ * Replaces the raw `originalPrice` / `bannerDiscount` fields with validated
+ * values. They come as a pair: if either is missing or malformed, both are
+ * null so callers never show a half-formed sale.
+ */
+export function withBannerPricing<T extends Product>(
+  product: T,
+): T & Required<Pick<Product, "originalPrice" | "bannerDiscount">> {
+  const bannerDiscount = readBannerDiscount(product.bannerDiscount);
+  const originalPrice =
+    typeof product.originalPrice === "number" &&
+    Number.isFinite(product.originalPrice)
+      ? product.originalPrice
+      : null;
+  const valid = bannerDiscount !== null && originalPrice !== null;
+
+  return {
+    ...product,
+    originalPrice: valid ? originalPrice : null,
+    bannerDiscount: valid ? bannerDiscount : null,
+  };
+}
+
 function readProductDetail(value: unknown): ProductDetail | null {
   if (!isProduct(value) || value.isDeleted) return null;
 
@@ -250,25 +304,14 @@ function readProductDetail(value: unknown): ProductDetail | null {
       })
     : [];
 
-  return {
+  return withBannerPricing({
     ...value,
     volumeTiers: readVolumeTier(value.volumeTiers),
     reviews,
     displayPrice,
     displayMinQty,
     isWholesale,
-  };
-}
-
-async function authRequest() {
-  const accessToken = (await cookies()).get(accessTokenCookie)?.value;
-
-  return {
-    ...(accessToken
-      ? { headers: { Authorization: `Bearer ${accessToken}` } }
-      : {}),
-    cache: "no-store" as const,
-  };
+  });
 }
 
 export async function getProducts(
@@ -287,10 +330,12 @@ export async function getProducts(
       deal: query.deal ? "true" : undefined,
     },
     tags: [productsTag],
-    ...(await authRequest()),
+    // The signed-in user's token gets role-based prices (displayPrice/displayMinQty).
+    auth: "optional",
   });
 
-  return parseApiPage(result, "products", isProduct);
+  const page = parseApiPage(result, "products", isProduct);
+  return { ...page, data: page.data.map(withBannerPricing) };
 }
 
 export type FeaturedProductsSource = "featured" | "fallback";
@@ -306,7 +351,7 @@ export async function getFeaturedProducts(
   const result: unknown = await apiGet("products/featured", {
     searchParams: { limit },
     tags: [productsTag],
-    ...(await authRequest()),
+    auth: "optional",
   });
 
   if (
@@ -337,7 +382,9 @@ export async function getFeaturedProducts(
 
   return {
     ...page,
-    data: page.data.filter((product) => !product.isDeleted),
+    data: page.data
+      .filter((product) => !product.isDeleted)
+      .map(withBannerPricing),
     source,
   };
 }
@@ -350,12 +397,12 @@ export async function getProductById(
   try {
     const result: unknown = await apiGet(resource, {
       tags: [productsTag],
-      ...(await authRequest()),
+      auth: "optional",
     });
 
     return readProductDetail(parseApiItem(result, resource, isRecord));
   } catch (error) {
-    if (error instanceof ApiRequestError && error.status === 404) {
+    if (isMissingResourceError(error)) {
       return null;
     }
 

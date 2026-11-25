@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { cancelOrderAction } from "@/actions/orders.actions";
+import { endClientSession } from "@/lib/client-session";
+import { goToWholesaleFeeIfRequired } from "@/lib/wholesale-fee";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -33,10 +35,12 @@ export default function CancelOrderButton({
     startTransition(async () => {
       const result = await cancelOrderAction(orderId);
       if (result.status === "error") {
+        if (goToWholesaleFeeIfRequired(result.statusCode)) return;
         if (result.statusCode === 401) {
-          router.push(
-            `/login?callbackUrl=${encodeURIComponent(`/user/orders/${orderId}`)}`,
-          );
+          await endClientSession({
+            message: result.message,
+            callbackUrl: `/user/orders/${orderId}`,
+          });
           return;
         }
         toast.error(result.message);

@@ -1,8 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { AuthApiError, authRequest } from "@/actions/auth-request";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { isRecord, parseApiItem } from "@/services/api-response";
 import type { Brand } from "@/services/brands.service";
 
@@ -30,14 +28,6 @@ function readBrand(value: unknown): Brand | null {
 
 function isBrand(value: unknown): value is Brand {
   return readBrand(value) !== null;
-}
-
-async function accessToken() {
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) {
-    throw new AuthApiError("Please sign in again.", 401);
-  }
-  return token;
 }
 
 function brandFormData(input: FormData, requireName: boolean) {
@@ -70,12 +60,7 @@ async function mutateBrand(
   method: "POST" | "PATCH" | "DELETE",
   body?: FormData,
 ) {
-  const token = await accessToken();
-  return authRequest<unknown>(path, {
-    method,
-    headers: { Authorization: `Bearer ${token}` },
-    body,
-  });
+  return authRequest<unknown>(path, { method, body }, { auth: "required" });
 }
 
 export async function createBrand(input: FormData) {

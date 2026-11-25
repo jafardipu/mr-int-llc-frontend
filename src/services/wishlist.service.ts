@@ -1,10 +1,12 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { ApiRequestError, apiGet } from "@/services/api-service";
 import { isRecord, parseApiPage, type ApiPage } from "@/services/api-response";
-import { isProduct, type Product } from "@/services/products.service";
+import {
+  isProduct,
+  withBannerPricing,
+  type Product,
+} from "@/services/products.service";
 
 export interface WishlistItem {
   id: string;
@@ -49,26 +51,20 @@ export function parseWishlistItem(value: unknown): WishlistItem {
 
   return {
     ...identity,
-    product: isProduct(value.product) ? value.product : null,
+    product: isProduct(value.product) ? withBannerPricing(value.product) : null,
   };
 }
 
 export async function getMyWishlist(
   query: WishlistQuery = {},
 ): Promise<ApiPage<WishlistItem>> {
-  const accessToken = (await cookies()).get(accessTokenCookie)?.value;
-  if (!accessToken) {
-    throw new ApiRequestError("Please sign in again.", 401);
-  }
-
   const result = await apiGet<unknown>("wishlist", {
     searchParams: {
       page: query.page ?? 1,
       limit: query.limit ?? 10,
       sort: query.sort ?? "-createdAt",
     },
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
+    auth: "required",
   });
 
   const page = parseApiPage(result, "wishlist", isWishlistItem);

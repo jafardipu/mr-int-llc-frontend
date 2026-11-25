@@ -3,10 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FormProvider, useForm } from "react-hook-form";
-import {
-  changePasswordAction,
-  logoutAction,
-} from "@/actions/auth.actions";
+import { changePasswordAction } from "@/actions/auth.actions";
+import { signOut } from "@/lib/client-session";
 import { useAppDispatch } from "@/redux/hooks";
 import { logout } from "@/redux/features/authSlice";
 import PasswordFormField, {
@@ -66,7 +64,7 @@ export default function ChangePasswordForm() {
 
     form.reset();
     setSubmitMessage(result.message || "Password updated. Signing you out…");
-    await logoutAction();
+    await signOut();
     dispatch(logout());
     router.push("/login");
     router.refresh();

@@ -27,7 +27,7 @@ export function CategoriesSkeleton() {
 
 export default async function Categories() {
   try {
-    const result = await getCategories({ limit: 20, sort: "name" });
+    const result = await getCategories({ limit: 20, sort: "-createdAt" });
     const categories = result.data.filter(
       (category) => category.status === "active",
     );

@@ -11,10 +11,14 @@ import {
   setItemSelected,
 } from "@/redux/features/cartSlice";
 import CartItemsPanel from "./CartItemsPanel";
-import CartSummary from "./CartSummary";
+import CartSummary, { type CartPriceEstimate } from "./CartSummary";
 import type { CartItem } from "@/data/cart.data";
 
-export default function CartPageContent() {
+export default function CartPageContent({
+  prices,
+}: {
+  prices: CartPriceEstimate | null;
+}) {
   const dispatch = useAppDispatch();
   const items = useAppSelector(selectCartItems);
   const selectedItemCount = useAppSelector(selectSelectedCount);
@@ -47,7 +51,11 @@ export default function CartPageContent() {
         onQuantityChange={handleQuantityChange}
         onItemChange={handleItemChange}
       />
-      <CartSummary selectedItemCount={selectedItemCount} subtotal={subtotal} />
+      <CartSummary
+        selectedItemCount={selectedItemCount}
+        subtotal={subtotal}
+        prices={prices}
+      />
     </div>
   );
 }

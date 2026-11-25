@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { cookies } from "next/headers";
 import Container from "@/components/container/Container";
 import logo from "@/assets/logo.png";
 import Image from "next/image";
@@ -8,14 +7,15 @@ import Link from "next/link";
 import CartIcon from "./CartIcon";
 import MobileNav from "./MobileNav";
 import { UserAvatar } from "@/components/shared/user/UserAvatar";
-import { accessTokenCookie } from "@/lib/auth-cookies";
+import { hasSessionCookie } from "@/lib/server-session";
 import { ApiRequestError } from "@/services/api-service";
 import { getMyProfile } from "@/services/users.service";
 import { Skeleton } from "@/components/ui/skeleton";
+import WholesaleFeeBanner from "@/components/wholesale-fee/WholesaleFeeBanner";
 
 async function currentUser() {
-  const accessToken = (await cookies()).get(accessTokenCookie)?.value;
-  if (!accessToken) return null;
+  // getMyProfile refreshes the token itself when it needs to.
+  if (!(await hasSessionCookie())) return null;
 
   try {
     const profile = await getMyProfile();
@@ -82,60 +82,63 @@ async function MobileAccount() {
 
 export default function Navbar() {
   return (
-    <div className="border-b-[1.5px] border-[#F3F4F6] py-2.5 xl:py-4.5">
-      <Container className="flex w-full max-w-[1766px] items-center justify-between gap-3 sm:gap-5">
-        <div className="flex min-w-0 items-center gap-3 xl:gap-5 2xl:gap-8">
-          <Link href="/">
-            <Image
-              src={logo}
-              alt="MR International"
-              width={100}
-              height={100}
-              className="h-14 w-12 object-contain sm:h-16 sm:w-14 xl:h-20 xl:w-36"
-            />
-          </Link>
-          <Suspense fallback={<nav aria-hidden="true" className="hidden xl:flex" />}>
-            <NavLinks />
-          </Suspense>
-        </div>
-        <div className="hidden shrink-0 items-center gap-4 xl:flex">
-          <Link href="/home#deal">
-            <h6 className="cursor-pointer text-lg font-semibold text-[#F43F5E] transition-all duration-300 hover:scale-95">
-              Amazing Deals
-            </h6>
-          </Link>
-          <Suspense
-            fallback={
-              <Skeleton
-                aria-label="Loading account"
-                className="size-10 rounded-full"
+    <>
+      <WholesaleFeeBanner />
+      <div className="border-b-[1.5px] border-[#F3F4F6] py-2.5 xl:py-4.5">
+        <Container className="flex w-full max-w-[1766px] items-center justify-between gap-3 sm:gap-5">
+          <div className="flex min-w-0 items-center gap-3 xl:gap-5 2xl:gap-8">
+            <Link href="/">
+              <Image
+                src={logo}
+                alt="MR International"
+                width={100}
+                height={100}
+                className="h-14 w-12 object-contain sm:h-16 sm:w-14 xl:h-20 xl:w-36"
               />
-            }
-          >
-            <DesktopAccount />
-          </Suspense>
-          <CartIcon />
-        </div>
-        <div className="flex shrink-0 items-center gap-2 xl:hidden">
-          <CartIcon compact />
-          <Suspense
-            fallback={
-              <>
+            </Link>
+            <Suspense fallback={<nav aria-hidden="true" className="hidden xl:flex" />}>
+              <NavLinks />
+            </Suspense>
+          </div>
+          <div className="hidden shrink-0 items-center gap-4 xl:flex">
+            <Link href="/home#deal">
+              <h6 className="cursor-pointer text-lg font-semibold text-[#F43F5E] transition-all duration-300 hover:scale-95">
+                Amazing Deals
+              </h6>
+            </Link>
+            <Suspense
+              fallback={
                 <Skeleton
                   aria-label="Loading account"
                   className="size-10 rounded-full"
                 />
-                <Skeleton
-                  aria-label="Loading menu"
-                  className="size-10 rounded-md"
-                />
-              </>
-            }
-          >
-            <MobileAccount />
-          </Suspense>
-        </div>
-      </Container>
-    </div>
+              }
+            >
+              <DesktopAccount />
+            </Suspense>
+            <CartIcon />
+          </div>
+          <div className="flex shrink-0 items-center gap-2 xl:hidden">
+            <CartIcon compact />
+            <Suspense
+              fallback={
+                <>
+                  <Skeleton
+                    aria-label="Loading account"
+                    className="size-10 rounded-full"
+                  />
+                  <Skeleton
+                    aria-label="Loading menu"
+                    className="size-10 rounded-md"
+                  />
+                </>
+              }
+            >
+              <MobileAccount />
+            </Suspense>
+          </div>
+        </Container>
+      </div>
+    </>
   );
 }

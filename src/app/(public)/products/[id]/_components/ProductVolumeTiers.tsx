@@ -13,7 +13,7 @@ export default function ProductVolumeTiers({
         id="volume-tiers-heading"
         className="text-sm font-semibold text-black/60"
       >
-        Volume pricing
+        Wholesale pricing
       </h2>
       <div className="mt-2 overflow-x-auto rounded-lg border border-[#E9E6DF]">
         <table className="min-w-full text-left text-sm text-[#4B5563]">

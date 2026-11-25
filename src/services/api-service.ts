@@ -1,6 +1,11 @@
 import "server-only";
 
 import { envConfig } from "@/config";
+import {
+  sendWithSession,
+  withBearer,
+  type SessionAuth,
+} from "@/lib/server-session";
 
 type ApiQueryValue = string | number | undefined;
 
@@ -10,6 +15,12 @@ export interface ApiGetOptions {
   tags?: string[];
   headers?: HeadersInit;
   cache?: RequestCache;
+  /**
+   * Send the signed-in user's `Bearer` token, refreshing it when it expires
+   * or the API rejects it. Implies `cache: "no-store"`. Don't set the
+   * Authorization header yourself.
+   */
+  auth?: SessionAuth;
 }
 
 export class ApiRequestError extends Error {
@@ -20,6 +31,17 @@ export class ApiRequestError extends Error {
     super(message);
     this.name = "ApiRequestError";
   }
+}
+
+/**
+ * For a by-id lookup: true when the id doesn't resolve to a record. The
+ * backend answers 404 for an unknown id and 400 for a malformed one.
+ */
+export function isMissingResourceError(error: unknown) {
+  return (
+    error instanceof ApiRequestError &&
+    (error.status === 404 || error.status === 400)
+  );
 }
 
 function getApiBaseUrl() {
@@ -34,7 +56,27 @@ function getApiBaseUrl() {
 
 export async function apiGet<T>(
   endpoint: string,
-  { searchParams, revalidate = 300, tags, headers, cache }: ApiGetOptions = {},
+  { auth, ...options }: ApiGetOptions = {},
+): Promise<T> {
+  if (!auth) return fetchApi<T>(endpoint, options);
+
+  return sendWithSession(
+    (accessToken) =>
+      fetchApi<T>(endpoint, {
+        ...options,
+        headers: withBearer(options.headers, accessToken),
+        cache: "no-store",
+      }),
+    {
+      auth,
+      toError: (message, status) => new ApiRequestError(message, status),
+    },
+  );
+}
+
+async function fetchApi<T>(
+  endpoint: string,
+  { searchParams, revalidate = 300, tags, headers, cache }: ApiGetOptions,
 ): Promise<T> {
   const url = new URL(endpoint.replace(/^\/+/, ""), getApiBaseUrl());
 

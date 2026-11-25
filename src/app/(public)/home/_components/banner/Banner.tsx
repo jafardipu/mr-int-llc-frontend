@@ -5,35 +5,31 @@ import {
 } from "@/services/banners.service";
 import BannerCarousel from "./BannerCarousel";
 
-const defaultBannerLink = "/products";
-
-const fallbackBanners: BannerItem[] = [
-  {
-    id: "fallback-banner-1",
-    image: "/image/banner_image_2.png",
-    link: defaultBannerLink,
+function fallbackBanner(id: string, image: string): BannerItem {
+  return {
+    id,
+    image,
+    targetType: null,
+    productId: null,
+    categoryId: null,
+    product: null,
+    category: null,
+    discountPercent: null,
+    startDate: null,
+    endDate: null,
+    link: "/products",
     isActive: true,
     isDeleted: false,
     createdAt: "",
     updatedAt: "",
-  },
-  {
-    id: "fallback-banner-2",
-    image: "/image/auth_banner_image.png",
-    link: defaultBannerLink,
-    isActive: true,
-    isDeleted: false,
-    createdAt: "",
-    updatedAt: "",
-  },
-];
-
-function withDefaultLink(banners: BannerItem[]): BannerItem[] {
-  return banners.map((banner) => ({
-    ...banner,
-    link: banner.link?.trim() || defaultBannerLink,
-  }));
+  };
 }
+
+// Where each banner links is decided by `bannerHref` in BannerCarousel.
+const fallbackBanners: BannerItem[] = [
+  fallbackBanner("fallback-banner-2", "/image/auth_banner_image.png"),
+  fallbackBanner("fallback-banner-1", "/image/banner_image_2.png"),
+];
 
 export function BannerSkeleton() {
   return (
@@ -52,10 +48,7 @@ export function BannerSkeleton() {
 export default async function Banner() {
   try {
     const result = await getHomepageBanners({ page: 1, limit: 10 });
-    const banners =
-      result.data.length > 0
-        ? withDefaultLink(result.data)
-        : fallbackBanners;
+    const banners = result.data.length > 0 ? result.data : fallbackBanners;
 
     return <BannerCarousel banners={banners} />;
   } catch {

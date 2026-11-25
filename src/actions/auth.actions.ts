@@ -16,6 +16,7 @@ import {
 import { AuthApiError } from "@/actions/auth-request";
 import { resendOtp, verifyOtp } from "@/actions/otp.service";
 import { createUser } from "@/actions/users.service";
+import { clearSession } from "@/lib/server-session";
 import type { AuthActionState, AuthFlow } from "./auth.types";
 
 const signupEmailCookie = "signup-email";
@@ -82,7 +83,13 @@ function verificationFailure(error: unknown): AuthActionState {
   return { status: "error", message: error.message };
 }
 
+/**
+ * Replaces the whole session. OTP sign-up returns no refresh token, so any
+ * refresh token left from an earlier login must go too, or it would be used
+ * to refresh into that other account.
+ */
 async function storeAuthSession(accessToken: string, refreshToken?: string) {
+  await clearSession();
   const cookieStore = await cookies();
   cookieStore.set(accessTokenCookie, accessToken, accessTokenCookieOptions);
   if (refreshToken) {
@@ -107,6 +114,15 @@ async function readOtpSession() {
     email,
     flow: flow === "reset" ? "reset" : "signup",
   } as const;
+}
+
+/** `wholesaleFee.required` from a login or verify-otp response. */
+function readWholesaleFeeRequired(data: unknown): boolean {
+  return (
+    isRecord(data) &&
+    isRecord(data.wholesaleFee) &&
+    data.wholesaleFee.required === true
+  );
 }
 
 function readSessionToken(data: unknown): string | undefined {
@@ -278,6 +294,7 @@ export async function verifySignupOtpAction(
       status: "success",
       message: result.message || "Email verified.",
       flow: "signup",
+      wholesaleFeeRequired: readWholesaleFeeRequired(result.data),
     };
   } catch (error) {
     return verificationFailure(error);
@@ -317,6 +334,7 @@ export async function loginAction(
     return {
       status: "success",
       message: result.message || "Login successful.",
+      wholesaleFeeRequired: readWholesaleFeeRequired(data),
     };
   } catch (error) {
     return failure(error, "Unable to sign in. Please try again.");
@@ -398,10 +416,14 @@ export async function resetPasswordAction(input: {
   }
 }
 
+/**
+ * There is no logout endpoint: signing out clears both tokens here (and the
+ * server's refresh cache). Browser code should call `signOut()` or
+ * `endClientSession()` from `@/lib/client-session`, which also tell other tabs.
+ */
 export async function logoutAction() {
+  await clearSession();
   const cookieStore = await cookies();
-  cookieStore.delete(accessTokenCookie);
-  cookieStore.delete(refreshTokenCookie);
   cookieStore.delete(otpTokenCookie);
   cookieStore.delete(signupEmailCookie);
   cookieStore.delete(authFlowCookie);
@@ -425,13 +447,8 @@ export async function changePasswordAction(input: {
     return { status: "error", message: "Passwords do not match." };
   }
 
-  const accessToken = (await cookies()).get(accessTokenCookie)?.value;
-  if (!accessToken) {
-    return { status: "error", message: "Please sign in again." };
-  }
-
   try {
-    const result = await changePassword(accessToken, {
+    const result = await changePassword({
       oldPassword: input.oldPassword,
       newPassword: input.newPassword,
       confirmPassword: input.confirmPassword,

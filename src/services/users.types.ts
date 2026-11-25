@@ -13,6 +13,16 @@ export interface ProfileOrder {
   createdAt: string;
 }
 
+/**
+ * The one-time wholesale account fee as `/users/my-profile` reports it.
+ * null for accounts that never owed one (retail, older wholesale accounts).
+ */
+export interface ProfileWholesaleFee {
+  status: "pending" | "paid" | null;
+  amount: number | null;
+  paidAt: string | null;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -27,6 +37,7 @@ export interface UserProfile {
   verification: ProfileVerification;
   address: unknown[];
   deviceHistory: unknown[];
+  wholesaleFee: ProfileWholesaleFee | null;
 }
 
 export interface MyProfile extends UserProfile {

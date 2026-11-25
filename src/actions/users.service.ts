@@ -1,8 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-import { AuthApiError, authRequest } from "@/actions/auth-request";
-import { accessTokenCookie } from "@/lib/auth-cookies";
+import { authRequest } from "@/actions/auth-request";
 import {
   parseUpdatedProfile,
   readProfileMessage,
@@ -57,16 +55,11 @@ function profileFormData(input: FormData | UpdateMyProfileInput) {
 export async function updateMyProfile(
   input: FormData | UpdateMyProfileInput,
 ): Promise<{ message: string; profile: UserProfile }> {
-  const accessToken = (await cookies()).get(accessTokenCookie)?.value;
-  if (!accessToken) {
-    throw new AuthApiError("Please sign in again.", 401);
-  }
-
-  const result = await authRequest<unknown>("/users/update-my-profile", {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: profileFormData(input),
-  });
+  const result = await authRequest<unknown>(
+    "/users/update-my-profile",
+    { method: "PATCH", body: profileFormData(input) },
+    { auth: "required" },
+  );
 
   return {
     message: readProfileMessage(result) || "profile updated successfully",

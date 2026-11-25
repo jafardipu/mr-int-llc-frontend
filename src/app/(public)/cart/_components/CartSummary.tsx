@@ -1,12 +1,35 @@
+"use client";
+
 import Link from "next/link";
+import { useWholesaleFeeState } from "@/components/wholesale-fee/wholesale-fee-store";
+import { wholesaleFeePath } from "@/lib/wholesale-fee";
+
+/** The admin's store prices, shown only as a hint; checkout does the math. */
+export type CartPriceEstimate = {
+  shippingFee: number;
+  taxRate: number;
+};
 
 interface CartSummaryProps {
   selectedItemCount: number;
   subtotal: number;
+  prices: CartPriceEstimate | null;
 }
 
 function formatPrice(price: number) {
   return `$${price.toFixed(2)}`;
+}
+
+/** "Shipping $10.00 · Tax 8.25% · calculated at checkout". */
+function estimateLine(prices: CartPriceEstimate) {
+  const parts = [
+    prices.shippingFee > 0
+      ? `Shipping ${formatPrice(prices.shippingFee)}`
+      : "Free shipping",
+  ];
+  if (prices.taxRate > 0) parts.push(`Tax ${Number(prices.taxRate.toFixed(3))}%`);
+  parts.push("calculated at checkout");
+  return parts.join(" · ");
 }
 
 /**
@@ -16,7 +39,10 @@ function formatPrice(price: number) {
 export default function CartSummary({
   selectedItemCount,
   subtotal,
+  prices,
 }: CartSummaryProps) {
+  const wholesaleFee = useWholesaleFeeState();
+
   return (
     <aside aria-labelledby="cart-summary-title" className="h-fit">
       <h2
@@ -44,11 +70,20 @@ export default function CartSummary({
         </dl>
 
         <p className="mt-4 text-xs leading-relaxed text-[#737373]">
-          Shipping, tax and promo codes are calculated at checkout.
+          {prices
+            ? estimateLine(prices)
+            : "Shipping, tax and promo codes are calculated at checkout."}
         </p>
       </div>
 
-      {selectedItemCount > 0 ? (
+      {wholesaleFee.required ? (
+        <Link
+          href={wholesaleFeePath}
+          className="mt-4 block w-full rounded-full bg-secondary-color px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-white duration-300 hover:bg-[#5a3614]"
+        >
+          Pay wholesale fee to continue
+        </Link>
+      ) : selectedItemCount > 0 ? (
         <Link
           href="/cart/shipping-address"
           className="mt-4 block w-full rounded-full bg-secondary-color px-5 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-white duration-300 hover:bg-[#5a3614]"

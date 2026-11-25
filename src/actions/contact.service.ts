@@ -1,8 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { AuthApiError, authRequest } from "@/actions/auth-request";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { isRecord } from "@/services/api-response";
 
 export type ContactStatus = "pending" | "replied";
@@ -64,18 +62,19 @@ export async function submitContact(input: SubmitContactInput) {
   if (!email) throw new AuthApiError("Email is required", 400);
   if (!message) throw new AuthApiError("Message is required", 400);
 
-  const token = (await cookies()).get(accessTokenCookie)?.value;
   const body: Record<string, string> = { name, email, message };
   if (subject) body.subject = subject;
 
-  const result = await authRequest<unknown>("/contact", {
-    method: "POST",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "Content-Type": "application/json",
+  // Signed-in senders are linked to their account; guests can write too.
+  const result = await authRequest<unknown>(
+    "/contact",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    { auth: "optional" },
+  );
 
   const contact = readContact(result.data);
   if (!contact) {

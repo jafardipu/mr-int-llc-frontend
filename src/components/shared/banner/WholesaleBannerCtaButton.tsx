@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { logoutAction } from "@/actions/auth.actions";
+import { signOut } from "@/lib/client-session";
 import { useAppDispatch } from "@/redux/hooks";
 import { logout } from "@/redux/features/authSlice";
 
@@ -48,7 +48,7 @@ export default function WholesaleBannerCtaButton({
         if (pending) return;
         setPending(true);
         try {
-          await logoutAction();
+          await signOut();
           dispatch(logout());
           router.push("/sign-up");
           router.refresh();

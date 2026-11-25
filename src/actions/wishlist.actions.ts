@@ -4,7 +4,7 @@ import { AuthApiError } from "@/actions/auth-request";
 import { addToWishlist, removeFromWishlist } from "@/actions/wishlist.service";
 import { ApiRequestError } from "@/services/api-service";
 import { collectPages } from "@/services/api-response";
-import { getMyProfile } from "@/services/users.service";
+import { getMyProfile, isWholesaleFeeDue } from "@/services/users.service";
 import { getMyWishlist } from "@/services/wishlist.service";
 
 export type WishlistActionResult = {
@@ -39,6 +39,12 @@ export async function loadWishlistIndexAction(): Promise<WishlistIndex> {
     if (profile.role !== "retail" && profile.role !== "wholesale") {
       return { isLoggedIn: true, canUse: false, items: {} };
     }
+    // Until the wholesale fee is paid the wishlist answers 402. This loads
+    // in the background on every page, so switch it off rather than
+    // redirecting the customer away from the catalog.
+    if (isWholesaleFeeDue(profile)) {
+      return { isLoggedIn: true, canUse: false, items: {} };
+    }
   } catch (error) {
     if (error instanceof ApiRequestError && error.status === 401) {
       return { isLoggedIn: false, canUse: true, items: {} };
@@ -70,7 +76,10 @@ export async function loadWishlistIndexAction(): Promise<WishlistIndex> {
     if (error instanceof ApiRequestError && error.status === 401) {
       return { isLoggedIn: false, canUse: true, items: {}, message };
     }
-    if (error instanceof ApiRequestError && error.status === 403) {
+    if (
+      error instanceof ApiRequestError &&
+      (error.status === 403 || error.status === 402)
+    ) {
       return { isLoggedIn: true, canUse: false, items: {}, message };
     }
 

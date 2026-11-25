@@ -67,6 +67,50 @@ export const getContents = cache(async (): Promise<Contents> => {
   return readContents(parseApiItem(result, "contents", isContents));
 });
 
+/** Store-wide prices set by the admin; the backend reads them per request. */
+export interface StorePrices {
+  /** Flat USD per order. */
+  shippingFee: number;
+  /** Percent, e.g. 8.25. */
+  taxRate: number;
+  /** One-time USD fee for new wholesale accounts; 0 when switched off. */
+  wholesaleAccountFee: number;
+}
+
+// The admin can change these at any time, so keep them only briefly.
+const pricesRevalidate = 60;
+
+function readPrice(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : null;
+}
+
+/** Display-only copy of the store prices. Never use it to compute a total. */
+export async function getStorePrices(): Promise<StorePrices> {
+  const result: unknown = await apiGet("contents", {
+    searchParams: { key: "prices" },
+    tags: [contentsTag, "store-prices"],
+    revalidate: pricesRevalidate,
+  });
+
+  const prices =
+    isRecord(result) && result.success === true && isRecord(result.data)
+      ? result.data.prices
+      : undefined;
+  const shippingFee = isRecord(prices) ? readPrice(prices.shippingFee) : null;
+  const taxRate = isRecord(prices) ? readPrice(prices.taxRate) : null;
+  const wholesaleAccountFee = isRecord(prices)
+    ? readPrice(prices.wholesaleAccountFee)
+    : null;
+
+  if (shippingFee === null || taxRate === null || wholesaleAccountFee === null) {
+    throw new Error("API returned an invalid response: /contents?key=prices");
+  }
+
+  return { shippingFee, taxRate, wholesaleAccountFee };
+}
+
 export const getContentByKey = cache(
   async (key: ContentKey): Promise<string | null> => {
     const result: unknown = await apiGet("contents", {

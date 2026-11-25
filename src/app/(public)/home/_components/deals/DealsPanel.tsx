@@ -156,6 +156,12 @@ export default function DealsPanel({
                         {formatPrice(featuredProduct.originalPrice)}
                       </span>
                     )}
+                    {featuredProduct.originalPrice !== undefined &&
+                      featuredProduct.badge && (
+                        <span className="self-center rounded bg-[#267E0B] px-1.5 py-0.5 text-[11px] font-medium text-white">
+                          {featuredProduct.badge}
+                        </span>
+                      )}
                   </div>
                   {featuredProduct.stockCount !== undefined && (
                     <p className="mt-2 text-xs text-[#9CA3AF]">

@@ -2,6 +2,7 @@ import PaginationSection from "@/components/shared/pagination/PaginationSection"
 import { Skeleton } from "@/components/ui/skeleton";
 import { mapCatalogProduct } from "@/lib/catalog-api";
 import { ApiRequestError } from "@/services/api-service";
+import { redirectIfWholesaleFeeRequired } from "@/services/wholesale-fee.service";
 import { getMyWishlist } from "@/services/wishlist.service";
 import FavoritesEmpty from "./FavoritesEmpty";
 import FavoritesList from "./FavoritesList";
@@ -71,6 +72,7 @@ export default async function FavoritesContainer({
       </div>
     );
   } catch (error) {
+    redirectIfWholesaleFeeRequired(error);
     const message =
       error instanceof ApiRequestError
         ? error.message

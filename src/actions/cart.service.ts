@@ -1,16 +1,8 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { AuthApiError, authRequest } from "@/actions/auth-request";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { isRecord, parseApiItem } from "@/services/api-response";
 import { getMyCart, readCart, type Cart } from "@/services/cart.service";
-
-async function accessToken() {
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) throw new AuthApiError("Please sign in again.", 401);
-  return token;
-}
 
 function parseCart(result: { data: unknown }, resource: string): Cart {
   const cart = readCart(parseApiItem(result, resource, isRecord));
@@ -27,15 +19,15 @@ function isDuplicateError(error: unknown) {
 }
 
 export async function addToCart(productId: string, quantity = 1) {
-  const token = await accessToken();
-  const result = await authRequest<unknown>("/cart", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const result = await authRequest<unknown>(
+    "/cart",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId, quantity }),
     },
-    body: JSON.stringify({ productId, quantity }),
-  });
+    { auth: "required" },
+  );
 
   return {
     message: result.message || "Added to cart successfully",
@@ -44,17 +36,14 @@ export async function addToCart(productId: string, quantity = 1) {
 }
 
 export async function updateCartItem(itemId: string, quantity: number) {
-  const token = await accessToken();
   const result = await authRequest<unknown>(
     `/cart/${encodeURIComponent(itemId)}`,
     {
       method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ quantity }),
     },
+    { auth: "required" },
   );
 
   return {
@@ -64,13 +53,10 @@ export async function updateCartItem(itemId: string, quantity: number) {
 }
 
 export async function removeCartItem(itemId: string) {
-  const token = await accessToken();
   const result = await authRequest<unknown>(
     `/cart/${encodeURIComponent(itemId)}`,
-    {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    },
+    { method: "DELETE" },
+    { auth: "required" },
   );
 
   return {

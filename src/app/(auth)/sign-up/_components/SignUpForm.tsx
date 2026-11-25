@@ -1,6 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useState, type FormEvent } from "react";
+import {
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.png";
 import Image from "next/image";
@@ -8,6 +14,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerUserAction } from "@/actions/auth.actions";
 import type { AuthActionState } from "@/actions/auth.types";
+import { loadWholesaleFeeInfoAction } from "@/actions/wholesale-fee.actions";
+import { formatFeeAmount } from "@/lib/wholesale-fee";
+import type { WholesaleFeeInfo } from "@/services/wholesale-fee.service";
 
 const initialState: AuthActionState = { status: "idle", message: "" };
 
@@ -20,7 +29,29 @@ export default function SignupForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [role, setRole] = useState("retail");
+  const [feeInfo, setFeeInfo] = useState<WholesaleFeeInfo | null>(null);
+  const feeRequestRef = useRef(0);
   const router = useRouter();
+
+  // Only for Wholesale, and only when the admin has the fee switched on.
+  const feeNote =
+    role === "wholesale" && feeInfo?.enabled && feeInfo.amount > 0
+      ? `Wholesale accounts have a one-time ${formatFeeAmount(feeInfo.amount)} fee, paid after you verify your email.`
+      : "";
+
+  const onRoleChange = (nextRole: string) => {
+    setRole(nextRole);
+    if (nextRole !== "wholesale") return;
+
+    // Ask each time Wholesale is picked: the admin can change the fee.
+    const request = ++feeRequestRef.current;
+    void loadWholesaleFeeInfoAction().then((result) => {
+      if (request !== feeRequestRef.current) return;
+      // On failure just leave the note out; the payment page shows the amount.
+      setFeeInfo(result.status === "success" ? result.data : null);
+    });
+  };
 
   useEffect(() => {
     if (state.status !== "success") return;
@@ -83,6 +114,8 @@ export default function SignupForm() {
               name="role"
               required
               defaultValue="retail"
+              aria-describedby={feeNote ? "wholesale-fee-note" : undefined}
+              onChange={(event) => onRoleChange(event.target.value)}
               className="w-full appearance-none rounded-lg border border-[#3D3D3D] bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 transition focus:border-[#3D3D3D] focus:outline-none focus:ring-1 focus:ring-gray-400"
             >
               <option value="retail">Retail Customer</option>
@@ -90,6 +123,14 @@ export default function SignupForm() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
           </div>
+          {feeNote && (
+            <p
+              id="wholesale-fee-note"
+              className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            >
+              {feeNote}
+            </p>
+          )}
         </div>
 
         <div>

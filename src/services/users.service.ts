@@ -1,11 +1,15 @@
 import "server-only";
 
 import { cache } from "react";
-import { cookies } from "next/headers";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { ApiRequestError, apiGet } from "@/services/api-service";
 import { isRecord } from "@/services/api-response";
-import type { MyProfile, ProfileOrder, UserProfile, UserRole } from "@/services/users.types";
+import type {
+  MyProfile,
+  ProfileOrder,
+  ProfileWholesaleFee,
+  UserProfile,
+  UserRole,
+} from "@/services/users.types";
 
 const userRoles: UserRole[] = ["retail", "wholesale", "admin", "supper_admin"];
 
@@ -76,7 +80,36 @@ function readUserProfile(value: unknown): UserProfile {
     verification,
     address: Array.isArray(value.address) ? value.address : [],
     deviceHistory: Array.isArray(value.deviceHistory) ? value.deviceHistory : [],
+    wholesaleFee: readProfileWholesaleFee(value.wholesaleFee),
   };
+}
+
+function readProfileWholesaleFee(value: unknown): ProfileWholesaleFee | null {
+  if (!isRecord(value)) return null;
+  return {
+    status:
+      value.status === "pending" || value.status === "paid"
+        ? value.status
+        : null,
+    amount:
+      typeof value.amount === "number" && Number.isFinite(value.amount)
+        ? value.amount
+        : null,
+    paidAt: typeof value.paidAt === "string" ? value.paidAt : null,
+  };
+}
+
+/**
+ * The profile has no `required` flag: the fee is due when a wholesale account
+ * has a fee record that isn't paid. Retail and older wholesale accounts have
+ * no record, so this is false for them.
+ */
+export function isWholesaleFeeDue(profile: UserProfile) {
+  return (
+    profile.role === "wholesale" &&
+    profile.wholesaleFee !== null &&
+    profile.wholesaleFee.status !== "paid"
+  );
 }
 
 export function parseMyProfile(result: unknown): MyProfile {
@@ -120,14 +153,8 @@ export function readProfileMessage(result: unknown) {
 }
 
 async function loadMyProfile() {
-  const accessToken = (await cookies()).get(accessTokenCookie)?.value;
-  if (!accessToken) {
-    throw new ApiRequestError("Please sign in again.", 401);
-  }
-
   const result = await apiGet<unknown>("users/my-profile", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
+    auth: "required",
   });
 
   return parseMyProfile(result);

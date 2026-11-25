@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import AuthSync from "@/components/auth/AuthSync";
 import TopInfo from "@/components/shared/navbar/TopInfo";
 import { WishlistProvider } from "@/components/wishlist/WishlistProvider";
 import ReduxProvider from "@/redux/ReduxProvider";
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <TopInfo />
               <div>{children}</div>
               <Toaster position="top-center" richColors />
+              <AuthSync />
             </WishlistProvider>
           </ReduxProvider>
         </ReactQueryProvider>

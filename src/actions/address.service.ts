@@ -1,8 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { AuthApiError, authRequest } from "@/actions/auth-request";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { isRecord, parseApiItem } from "@/services/api-response";
 import { readAddress, type Address } from "@/services/address.service";
 
@@ -15,12 +13,6 @@ export type AddressInput = {
   country?: string;
   isDefault?: boolean;
 };
-
-async function accessToken() {
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) throw new AuthApiError("Please sign in again.", 401);
-  return token;
-}
 
 function isAddress(value: unknown): value is Address {
   return readAddress(value) !== null;
@@ -49,15 +41,15 @@ function addressBody(input: AddressInput, requireLine1: boolean) {
 }
 
 export async function createAddress(input: AddressInput) {
-  const token = await accessToken();
-  const result = await authRequest<unknown>("/address", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const result = await authRequest<unknown>(
+    "/address",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(addressBody(input, true)),
     },
-    body: JSON.stringify(addressBody(input, true)),
-  });
+    { auth: "required" },
+  );
 
   return {
     message: result.message || "Address created successfully",
@@ -66,17 +58,14 @@ export async function createAddress(input: AddressInput) {
 }
 
 export async function updateAddress(id: string, input: AddressInput) {
-  const token = await accessToken();
   const result = await authRequest<unknown>(
     `/address/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(addressBody(input, false)),
     },
+    { auth: "required" },
   );
 
   return {
@@ -86,13 +75,10 @@ export async function updateAddress(id: string, input: AddressInput) {
 }
 
 export async function deleteAddress(id: string) {
-  const token = await accessToken();
   const result = await authRequest<unknown>(
     `/address/${encodeURIComponent(id)}`,
-    {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    },
+    { method: "DELETE" },
+    { auth: "required" },
   );
 
   return {

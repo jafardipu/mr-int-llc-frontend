@@ -1,7 +1,17 @@
 "use client";
 
-import { Heart, Minus, Plus, ShoppingCart, Check as CheckIcon } from "lucide-react";
+import {
+  Heart,
+  Lock,
+  Minus,
+  Plus,
+  ShoppingCart,
+  Check as CheckIcon,
+} from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useWholesaleFeeState } from "@/components/wholesale-fee/wholesale-fee-store";
+import { wholesaleFeePath } from "@/lib/wholesale-fee";
 import { usePathname, useRouter } from "next/navigation";
 import {
   addToWishlistAction,
@@ -138,6 +148,7 @@ export function ProductPurchaseControls({
   const router = useRouter();
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
+  const wholesaleFee = useWholesaleFeeState();
   const minQty = Math.max(1, product?.displayMinQty ?? 1);
   // The page keys this component by product id, so quantity starts at the
   // product's minimum whenever the product changes.
@@ -305,36 +316,46 @@ export function ProductPurchaseControls({
       )}
 
       <div className="grid grid-cols-2 gap-2 xl:w-[80%]">
-        <button
-          aria-live="polite"
-          aria-label={
-            isInCart
-              ? `${product?.title} is already in your cart`
-              : `Add ${quantity} item${quantity === 1 ? "" : "s"} to cart`
-          }
-          className={`min-h-12 w-full rounded-full px-6 py-3 text-sm font-semibold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
-            isInCart
-              ? "bg-emerald-600 hover:bg-emerald-700"
-              : "bg-secondary-color hover:bg-[#7d391b]"
-          }`}
-          disabled={outOfStock}
-          onClick={handleAddToCart}
-          type="button"
-        >
-          <span className="inline-flex items-center justify-center gap-2">
-            {isInCart ? (
-              <>
-                <CheckIcon aria-hidden="true" className="size-4" />
-                Already in Cart
-              </>
-            ) : (
-              <>
-                <ShoppingCart aria-hidden="true" className="size-4" />
-                Add to Cart
-              </>
-            )}
-          </span>
-        </button>
+        {wholesaleFee.required ? (
+          <Link
+            href={wholesaleFeePath}
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-secondary-color px-6 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#7d391b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48"
+          >
+            <Lock aria-hidden="true" className="size-4" />
+            Pay wholesale fee to continue
+          </Link>
+        ) : (
+          <button
+            aria-live="polite"
+            aria-label={
+              isInCart
+                ? `${product?.title} is already in your cart`
+                : `Add ${quantity} item${quantity === 1 ? "" : "s"} to cart`
+            }
+            className={`min-h-12 w-full rounded-full px-6 py-3 text-sm font-semibold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+              isInCart
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-secondary-color hover:bg-[#7d391b]"
+            }`}
+            disabled={outOfStock}
+            onClick={handleAddToCart}
+            type="button"
+          >
+            <span className="inline-flex items-center justify-center gap-2">
+              {isInCart ? (
+                <>
+                  <CheckIcon aria-hidden="true" className="size-4" />
+                  Already in Cart
+                </>
+              ) : (
+                <>
+                  <ShoppingCart aria-hidden="true" className="size-4" />
+                  Add to Cart
+                </>
+              )}
+            </span>
+          </button>
+        )}
 
         {product?.isWholesale ? (
           <p className="inline-flex min-h-11 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-center text-sm font-medium text-emerald-700">
@@ -345,7 +366,8 @@ export function ProductPurchaseControls({
           ""
         )}
 
-        {product?.amazonUrl && (
+        {/* Marketplace links are only for wholesale customers. */}
+        {product?.isWholesale && product.amazonUrl && (
           <a
             aria-label="Amazon Product"
             className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#000000] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#240d03] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-color sm:w-auto sm:min-w-48"
@@ -357,7 +379,7 @@ export function ProductPurchaseControls({
           </a>
         )}
 
-        {product?.walmartUrl && (
+        {product?.isWholesale && product.walmartUrl && (
           <a
             aria-label="Walmart Product"
             className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#E4E7EC] px-4 text-center text-sm font-medium text-[#5D6470] transition hover:border-secondary-color hover:text-secondary-color"

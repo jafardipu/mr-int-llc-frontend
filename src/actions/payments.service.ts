@@ -1,12 +1,10 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import {
   AuthApiError,
   authRequest,
   type ApiEnvelope,
 } from "@/actions/auth-request";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { isRecord } from "@/services/api-response";
 import type { PaymentStatus } from "@/services/orders.service";
 
@@ -59,19 +57,17 @@ export async function createPayment(orderId: string) {
   const id = orderId.trim();
   if (!id) throw new AuthApiError("Order is required", 400);
 
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) throw new AuthApiError("Please sign in again.", 401);
-
   let result: ApiEnvelope<unknown>;
   try {
-    result = await authRequest<unknown>("/payments/create", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+    result = await authRequest<unknown>(
+      "/payments/create",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: id }),
       },
-      body: JSON.stringify({ orderId: id }),
-    });
+      { auth: "required" },
+    );
   } catch (error) {
     logApiError("payments/create", error);
     throw error;

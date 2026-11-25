@@ -1,7 +1,5 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import {
   isRecord,
   parseApiItem,
@@ -124,6 +122,8 @@ export interface CheckoutSummaryItem {
   unitPrice: number;
   total: number;
   image: string | null;
+  /** Banner offer already included in `unitPrice`; shown as a note only. */
+  bannerDiscountPercent: number | null;
 }
 
 /** Server-priced cart. Display these numbers as-is; never recompute them. */
@@ -314,17 +314,6 @@ function isOrder(value: unknown): value is Order {
   return readOrder(value) !== null;
 }
 
-async function authHeaders() {
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) {
-    throw new ApiRequestError("Please sign in again.", 401);
-  }
-  return {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store" as const,
-  };
-}
-
 export async function getMyOrders(
   query: MyOrdersQuery = {},
 ): Promise<ApiPage<Order>> {
@@ -339,7 +328,7 @@ export async function getMyOrders(
       status: query.status,
     },
     tags: [ordersTag],
-    ...(await authHeaders()),
+    auth: "required",
   });
 
   const pageResult = parseApiPage(result, "orders/my-orders", isOrder);
@@ -357,7 +346,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
   try {
     const result: unknown = await apiGet(resource, {
       tags: [ordersTag],
-      ...(await authHeaders()),
+      auth: "required",
     });
     return readOrder(parseApiItem(result, resource, isRecord));
   } catch (error) {
@@ -440,7 +429,7 @@ export async function getMyDashboard(): Promise<CustomerDashboard> {
   const resource = "orders/my-dashboard";
   const result: unknown = await apiGet(resource, {
     tags: [ordersTag],
-    ...(await authHeaders()),
+    auth: "required",
   });
   return readDashboard(parseApiItem(result, resource, isRecord));
 }
@@ -487,6 +476,13 @@ function readSummaryItem(value: unknown, index: number): CheckoutSummaryItem | n
     total: readNumber(value.total ?? value.lineTotal, unitPrice * quantity),
     image:
       images.find((image) => image.isPrimary)?.url ?? images[0]?.url ?? null,
+    bannerDiscountPercent:
+      isRecord(product?.bannerDiscount) &&
+      typeof product.bannerDiscount.percent === "number" &&
+      Number.isFinite(product.bannerDiscount.percent) &&
+      product.bannerDiscount.percent > 0
+        ? product.bannerDiscount.percent
+        : null,
   };
 }
 
@@ -529,7 +525,7 @@ export async function getCheckoutSummary(
   const code = promoCode?.trim();
   const result: unknown = await apiGet("orders/checkout-summary", {
     searchParams: { promoCode: code || undefined },
-    ...(await authHeaders()),
+    auth: "required",
   });
 
   return readCheckoutSummary(parseApiItem(result, "orders/checkout-summary", isRecord));

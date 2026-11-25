@@ -2,39 +2,36 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { logoutAction } from "@/actions/auth.actions";
+import { loginPath, sessionEndReasonFor } from "@/lib/auth-session";
+import { endClientSession } from "@/lib/client-session";
 import { logout } from "@/redux/features/authSlice";
 import { useAppDispatch } from "@/redux/hooks";
 
 /**
- * Rendered when the API rejects the access token (expired, or the account is
- * blocked or unverified). The auth cookies are cleared before going to /login,
- * because the proxy sends anyone who still has an access-token cookie away
- * from the login page and back to the account area, which would loop.
+ * Rendered when the API still rejects the session after the server tried to
+ * refresh it (refresh token expired or invalid, account blocked, not
+ * verified or deleted). A Server Component can't clear cookies, so this
+ * clears both tokens before going to /login; otherwise the proxy would send
+ * the user straight back. Pass the 401's message to show why.
  */
-export default function SessionExpired({ callbackUrl }: { callbackUrl: string }) {
-  const router = useRouter();
+export default function SessionExpired({
+  callbackUrl,
+  message,
+}: {
+  callbackUrl: string;
+  message?: string;
+}) {
   const dispatch = useAppDispatch();
-  const loginHref = `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  const loginHref = loginPath({
+    callbackUrl,
+    reason: sessionEndReasonFor(message),
+  });
 
   useEffect(() => {
-    // Signing out twice (StrictMode) is harmless; only the last run navigates.
-    let cancelled = false;
-    void (async () => {
-      try {
-        await logoutAction();
-      } catch {
-        // Still send the customer to sign in.
-      }
-      if (cancelled) return;
-      dispatch(logout());
-      router.replace(loginHref);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [dispatch, loginHref, router]);
+    dispatch(logout());
+    // Single flight: StrictMode's second run joins the first.
+    void endClientSession({ callbackUrl, message });
+  }, [callbackUrl, dispatch, message]);
 
   return (
     <p

@@ -1,10 +1,12 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import { isRecord, parseApiItem } from "@/services/api-response";
 import { ApiRequestError, apiGet } from "@/services/api-service";
-import { isProduct, type Product } from "@/services/products.service";
+import {
+  isProduct,
+  withBannerPricing,
+  type Product,
+} from "@/services/products.service";
 
 const cartTag = "customer-cart";
 
@@ -38,7 +40,10 @@ function readCartItem(value: unknown): CartLineItem | null {
     return null;
   }
 
-  const product = value.product && isProduct(value.product) ? value.product : null;
+  const product =
+    value.product && isProduct(value.product)
+      ? withBannerPricing(value.product)
+      : null;
   const unitPrice =
     typeof value.unitPrice === "number"
       ? value.unitPrice
@@ -85,21 +90,10 @@ export function readCart(value: unknown): Cart | null {
   };
 }
 
-async function authHeaders() {
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) {
-    throw new ApiRequestError("Please sign in again.", 401);
-  }
-  return {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store" as const,
-  };
-}
-
 export async function getMyCart(): Promise<Cart> {
   const result: unknown = await apiGet("cart", {
     tags: [cartTag],
-    ...(await authHeaders()),
+    auth: "required",
   });
   const cart = readCart(parseApiItem(result, "cart", isRecord));
   if (!cart) {

@@ -16,6 +16,8 @@ import {
   syncCheckoutCartAction,
 } from "@/actions/checkout.actions";
 import { createPaymentAction } from "@/actions/payments.actions";
+import { endClientSession } from "@/lib/client-session";
+import { goToWholesaleFeeIfRequired } from "@/lib/wholesale-fee";
 import type { Address } from "@/services/address.service";
 import type { CheckoutSummary } from "@/services/orders.service";
 import EmptyState from "@/components/shared/empty-state/EmptyState";
@@ -29,7 +31,8 @@ import {
   selectSelectedItems,
 } from "@/redux/features/cartSlice";
 
-const loginUrl = `/login?callbackUrl=${encodeURIComponent("/cart/shipping-address")}`;
+const checkoutPath = "/cart/shipping-address";
+const loginUrl = `/login?callbackUrl=${encodeURIComponent(checkoutPath)}`;
 
 function formatPrice(value: number) {
   return `$${value.toFixed(2)}`;
@@ -46,7 +49,17 @@ function formatAddress(address: Address) {
     .join(" · ");
 }
 
-export default function CheckoutFlow() {
+/** "8.25%", "0%": a display label only. */
+function formatPercent(value: number) {
+  return `${Number(value.toFixed(3))}%`;
+}
+
+export default function CheckoutFlow({
+  taxRate,
+}: {
+  /** From the admin's store prices; only labels the tax line. null when unknown. */
+  taxRate: number | null;
+}) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const localSelected = useAppSelector(selectSelectedItems);
@@ -117,6 +130,7 @@ export default function CheckoutFlow() {
       if (!active) return;
 
       if (synced.status === "error") {
+        if (goToWholesaleFeeIfRequired(synced.statusCode)) return;
         if (synced.statusCode === 401) setAuthRequired(true);
         else setSummaryError(synced.message);
         setLoading(false);
@@ -134,6 +148,15 @@ export default function CheckoutFlow() {
         loadMyAddressesAction(),
       ]);
       if (!active) return;
+
+      if (
+        (summaryResult.status === "error" &&
+          goToWholesaleFeeIfRequired(summaryResult.statusCode)) ||
+        (addressResult.status === "error" &&
+          goToWholesaleFeeIfRequired(addressResult.statusCode))
+      ) {
+        return;
+      }
 
       if (
         (summaryResult.status === "error" && summaryResult.statusCode === 401) ||
@@ -187,8 +210,9 @@ export default function CheckoutFlow() {
       });
 
       if (result.status === "error") {
+        if (goToWholesaleFeeIfRequired(result.statusCode)) return;
         if (result.statusCode === 401) {
-          router.push(loginUrl);
+          void endClientSession({ message: result.message, callbackUrl: checkoutPath });
           return;
         }
         setError(result.message);
@@ -228,8 +252,9 @@ export default function CheckoutFlow() {
       setError("");
       const result = await loadCheckoutSummaryAction(code);
       if (result.status === "error") {
+        if (goToWholesaleFeeIfRequired(result.statusCode)) return;
         if (result.statusCode === 401) {
-          router.push(loginUrl);
+          void endClientSession({ message: result.message, callbackUrl: checkoutPath });
           return;
         }
         // Keep the previous summary; just explain why the code didn't apply.
@@ -248,6 +273,7 @@ export default function CheckoutFlow() {
       setError("");
       const result = await loadCheckoutSummaryAction();
       if (result.status === "error") {
+        if (goToWholesaleFeeIfRequired(result.statusCode)) return;
         setError(result.message);
         toast.error(result.message);
         return;
@@ -276,11 +302,12 @@ export default function CheckoutFlow() {
     });
 
     if (result.status === "error") {
+      if (goToWholesaleFeeIfRequired(result.statusCode)) return;
       console.error("[checkout] place order failed", result);
       placingRef.current = false;
       setPlacing(false);
       if (result.statusCode === 401) {
-        router.push(loginUrl);
+        void endClientSession({ message: result.message, callbackUrl: checkoutPath });
         return;
       }
       setError(result.message);
@@ -298,6 +325,7 @@ export default function CheckoutFlow() {
     const payment = await createPaymentAction(result.data.id);
 
     if (payment.status === "error") {
+      if (goToWholesaleFeeIfRequired(payment.statusCode)) return;
       // The order exists and can be paid later from its page ("Pay now").
       console.error("[checkout] start payment failed", payment);
       toast.error(
@@ -442,6 +470,9 @@ export default function CheckoutFlow() {
                         startTransition(async () => {
                           const result = await deleteAddressAction(address.id);
                           if (result.status === "error") {
+                            if (goToWholesaleFeeIfRequired(result.statusCode)) {
+                              return;
+                            }
                             setError(result.message);
                             return;
                           }
@@ -543,6 +574,11 @@ export default function CheckoutFlow() {
                 </span>
                 <span className="text-xs">
                   Qty {item.quantity} × {formatPrice(item.unitPrice)}
+                  {item.bannerDiscountPercent !== null && (
+                    <span className="ml-1.5 font-medium text-[#267E0B]">
+                      {item.bannerDiscountPercent}% off
+                    </span>
+                  )}
                 </span>
               </span>
               <span className="font-semibold text-[#24231F]">
@@ -553,25 +589,32 @@ export default function CheckoutFlow() {
         </ul>
 
         <dl className="mt-4 space-y-3 text-sm">
+          {/* Every amount here comes from checkout-summary as-is. Tax is
+              charged on the subtotal after the discount, so the discount
+              comes first. */}
           <div className="flex justify-between gap-3">
             <dt className="text-[#737373]">Sub total</dt>
             <dd className="font-bold">{formatPrice(summary.subtotal)}</dd>
           </div>
+          {summary.discount > 0 && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-[#737373]">
+                Discount{summary.promoCode ? ` (${summary.promoCode})` : ""}
+              </dt>
+              <dd className="font-bold text-emerald-600">
+                -{formatPrice(summary.discount)}
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between gap-3">
             <dt className="text-[#737373]">Shipping</dt>
             <dd className="font-bold">{formatPrice(summary.shippingFee)}</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="text-[#737373]">Tax</dt>
-            <dd className="font-bold">{formatPrice(summary.tax)}</dd>
-          </div>
-          <div className="flex justify-between gap-3">
             <dt className="text-[#737373]">
-              Discount{summary.promoCode ? ` (${summary.promoCode})` : ""}
+              Tax{taxRate !== null ? ` (${formatPercent(taxRate)})` : ""}
             </dt>
-            <dd className="font-bold text-emerald-600">
-              -{formatPrice(summary.discount)}
-            </dd>
+            <dd className="font-bold">{formatPrice(summary.tax)}</dd>
           </div>
           <div className="flex justify-between gap-3 border-t border-[#E9E9E7] pt-3">
             <dt className="text-base font-medium text-[#55544F]">Total</dt>

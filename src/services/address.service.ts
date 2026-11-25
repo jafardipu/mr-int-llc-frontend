@@ -1,7 +1,5 @@
 import "server-only";
 
-import { cookies } from "next/headers";
-import { accessTokenCookie } from "@/lib/auth-cookies";
 import {
   isRecord,
   parseApiItem,
@@ -52,17 +50,6 @@ function isAddress(value: unknown): value is Address {
   return readAddress(value) !== null;
 }
 
-async function authHeaders() {
-  const token = (await cookies()).get(accessTokenCookie)?.value;
-  if (!token) {
-    throw new ApiRequestError("Please sign in again.", 401);
-  }
-  return {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store" as const,
-  };
-}
-
 export async function getMyAddresses(query: {
   page?: number;
   limit?: number;
@@ -73,7 +60,7 @@ export async function getMyAddresses(query: {
       limit: query.limit ?? 50,
     },
     tags: [addressTag],
-    ...(await authHeaders()),
+    auth: "required",
   });
 
   const page = parseApiPage(result, "address", isAddress);
@@ -91,7 +78,7 @@ export async function getAddressById(id: string): Promise<Address | null> {
   try {
     const result: unknown = await apiGet(resource, {
       tags: [addressTag],
-      ...(await authHeaders()),
+      auth: "required",
     });
     const address = readAddress(parseApiItem(result, resource, isRecord));
     return address && !address.isDeleted ? address : null;

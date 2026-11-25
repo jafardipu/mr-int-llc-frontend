@@ -38,10 +38,24 @@ export function mapCatalogProduct(product: Product): CatalogProduct {
     product.displayPrice ??
     (product.isDeal ? product.dealPrice : null) ??
     product.retailPrice;
-  const hasDiscount =
+  // Show only prices the API returned: a banner discount wins, then a deal.
+  let sale: { originalPrice: number; badge: string } | null = null;
+  if (
+    product.bannerDiscount &&
+    product.originalPrice != null &&
+    product.originalPrice > price
+  ) {
+    sale = {
+      originalPrice: product.originalPrice,
+      badge: `${product.bannerDiscount.percent}% off`,
+    };
+  } else if (
     product.isDeal &&
     product.dealPrice !== null &&
-    product.dealPrice < product.retailPrice;
+    product.dealPrice < product.retailPrice
+  ) {
+    sale = { originalPrice: product.retailPrice, badge: "On Sale" };
+  }
 
   return {
     id: product.id,
@@ -50,9 +64,7 @@ export function mapCatalogProduct(product: Product): CatalogProduct {
     category: product.category?.name ?? "Other",
     title: product.name,
     price,
-    ...(hasDiscount
-      ? { originalPrice: product.retailPrice, badge: "On Sale" }
-      : {}),
+    ...(sale ?? {}),
     rating: product.avgRating,
     stockCount: product.stock,
     brand: product.brand?.name ?? "Other",

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ApiRequestError, apiGet } from "@/services/api-service";
+import { apiGet, isMissingResourceError } from "@/services/api-service";
 import {
   collectPages,
   isRecord,
@@ -96,7 +96,7 @@ export async function getBrandById(id: string): Promise<Brand | null> {
     const brand = readBrand(parseApiItem(result, resource, isBrand));
     return brand && !brand.isDeleted ? brand : null;
   } catch (error) {
-    if (error instanceof ApiRequestError && error.status === 404) {
+    if (isMissingResourceError(error)) {
       return null;
     }
     throw error;

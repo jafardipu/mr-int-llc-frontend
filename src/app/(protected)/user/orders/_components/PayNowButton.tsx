@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { createPaymentAction } from "@/actions/payments.actions";
+import { endClientSession } from "@/lib/client-session";
+import { goToWholesaleFeeIfRequired } from "@/lib/wholesale-fee";
 
 /**
  * Sends the customer to the order's Stripe Checkout page. The backend reuses
@@ -31,14 +33,16 @@ export default function PayNowButton({
     const result = await createPaymentAction(orderId);
 
     if (result.status === "error") {
+      if (goToWholesaleFeeIfRequired(result.statusCode)) return;
       console.error("[orders] start payment failed", result);
       busyRef.current = false;
       setRedirecting(false);
 
       if (result.statusCode === 401) {
-        router.push(
-          `/login?callbackUrl=${encodeURIComponent(`/user/orders/${orderId}`)}`,
-        );
+        void endClientSession({
+          message: result.message,
+          callbackUrl: `/user/orders/${orderId}`,
+        });
         return;
       }
       // Cancelled, already paid, or 409 "still processing": show the reason

@@ -8,7 +8,11 @@ import {
   type ApiPage,
   type ApiResponse,
 } from "@/services/api-response";
-import { isProduct, type Product } from "@/services/products.service";
+import {
+  isProduct,
+  withBannerPricing,
+  type Product,
+} from "@/services/products.service";
 
 const dealsTag = "catalog-deals";
 
@@ -61,7 +65,7 @@ function readDeal(value: unknown): Deal | null {
   const dealPrice = readNumber(value.dealPrice, NaN);
   if (!Number.isFinite(dealPrice)) return null;
 
-  const product: Product = {
+  const product: Product = withBannerPricing({
     ...value.product,
     displayPrice:
       typeof value.product.displayPrice === "number"
@@ -72,7 +76,7 @@ function readDeal(value: unknown): Deal | null {
       typeof value.product.dealPrice === "number"
         ? value.product.dealPrice
         : dealPrice,
-  };
+  });
 
   return {
     id: value.id,

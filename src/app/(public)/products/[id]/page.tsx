@@ -11,7 +11,6 @@ import {
   ProductFavoriteButton,
   ProductPurchaseControls,
 } from "./_components/ProductDetailsActions";
-import ProductReviews from "./_components/ProductReviews";
 import ProductVolumeTiers from "./_components/ProductVolumeTiers";
 import RelatedProducts from "./_components/RelatedProducts";
 
@@ -71,6 +70,13 @@ function ProductDetailsFallback() {
     </Container>
   );
 }
+
+// Offers end at 23:59:59 UTC, so format in UTC: everyone reads the same day.
+const offerEndFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
 
 function stockLabel(stock: number, status: string) {
   if (status === "out_of_stock" || stock <= 0) {
@@ -142,6 +148,23 @@ async function ProductDetailsContent({ params }: ProductDetailsPageProps) {
       product.category.isDeleted !== true &&
       product.category.status !== "inactive",
   );
+  // Prices are shown exactly as the API returns them. A banner discount takes
+  // precedence over the deal strike-through.
+  const bannerSale =
+    product.bannerDiscount &&
+    product.originalPrice !== null &&
+    product.originalPrice > product.displayPrice
+      ? {
+          originalPrice: product.originalPrice,
+          percent: product.bannerDiscount.percent,
+          endsAt: offerEndFormat.format(new Date(product.bannerDiscount.endsAt)),
+        }
+      : null;
+  const dealSale =
+    !bannerSale &&
+    product.isDeal &&
+    product.dealPrice !== null &&
+    product.dealPrice < product.retailPrice;
   const availability = stockLabel(product.stock, product.status);
   const unavailable =
     product.status === "out_of_stock" ||
@@ -212,21 +235,36 @@ async function ProductDetailsContent({ params }: ProductDetailsPageProps) {
               <p className="text-3xl font-bold tracking-tight text-[#252A30]">
                 ${product.displayPrice.toFixed(2)}
               </p>
-              {product.isDeal &&
-                product.dealPrice !== null &&
-                product.dealPrice < product.retailPrice && (
+              {bannerSale && (
+                <>
                   <p className="text-black/60">
                     <span className="line-through">
-                      ${product.retailPrice.toFixed(2)}
+                      ${bannerSale.originalPrice.toFixed(2)}
                     </span>
                   </p>
-                )}
+                  <span className="self-center rounded bg-[#267E0B] px-1.5 py-0.5 text-xs font-medium text-white">
+                    {bannerSale.percent}% off
+                  </span>
+                </>
+              )}
+              {dealSale && (
+                <p className="text-black/60">
+                  <span className="line-through">
+                    ${product.retailPrice.toFixed(2)}
+                  </span>
+                </p>
+              )}
               {product.displayMinQty > 1 && (
                 <p className="text-sm text-[#6B7280]">
                   Min qty {product.displayMinQty}
                 </p>
               )}
             </div>
+            {bannerSale && (
+              <p className="mt-1 text-xs font-medium text-[#267E0B]">
+                Offer ends {bannerSale.endsAt}
+              </p>
+            )}
 
             <div className="mt-4 space-y-3 text-sm leading-6 text-black/60">
               <p>{product.description}</p>

@@ -1,6 +1,12 @@
 import "server-only";
 
 import { envConfig } from "@/config";
+import { isAuthEndpoint } from "@/lib/auth-session";
+import {
+  sendWithSession,
+  withBearer,
+  type SessionAuth,
+} from "@/lib/server-session";
 
 export interface ApiEnvelope<T> {
   success: true;
@@ -33,9 +39,35 @@ function readMessage(payload: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+/**
+ * `auth` sends the signed-in user's `Bearer` token and refreshes it when it
+ * expires or the API rejects it (one retry). Don't set the Authorization
+ * header yourself. Ignored for the sign-in endpoints (login, OTP, password
+ * reset), which never refresh.
+ */
 export async function authRequest<T>(
   path: string,
   init: RequestInit = {},
+  { auth }: { auth?: SessionAuth } = {},
+): Promise<ApiEnvelope<T>> {
+  if (!auth || isAuthEndpoint(path)) return sendRequest<T>(path, init);
+
+  return sendWithSession(
+    (accessToken) =>
+      sendRequest<T>(path, {
+        ...init,
+        headers: withBearer(init.headers, accessToken),
+      }),
+    {
+      auth,
+      toError: (message, status) => new AuthApiError(message, status),
+    },
+  );
+}
+
+async function sendRequest<T>(
+  path: string,
+  init: RequestInit,
 ): Promise<ApiEnvelope<T>> {
   const baseUrl = (envConfig.serverUrl ?? envConfig.baseUrl)?.replace(
     /\/+$/,

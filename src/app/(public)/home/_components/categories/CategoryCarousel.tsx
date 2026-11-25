@@ -115,7 +115,8 @@ export default function CategoryCarousel({
       scrollLeft: carousel.scrollLeft,
     };
     draggedRef.current = false;
-    carousel.setPointerCapture(event.pointerId);
+    // Don't capture the pointer here: a captured pointer retargets the
+    // following click to the carousel, so a plain click never reaches the link.
     setIsPaused(true);
   };
 
@@ -126,7 +127,10 @@ export default function CategoryCarousel({
 
     const delta = event.clientX - drag.startX;
     if (Math.abs(delta) > 4) {
-      draggedRef.current = true;
+      if (!draggedRef.current) {
+        draggedRef.current = true;
+        carousel.setPointerCapture(event.pointerId);
+      }
       carousel.scrollLeft = drag.scrollLeft - delta;
     }
   };
